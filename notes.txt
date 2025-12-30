@@ -1,0 +1,78 @@
+
+
+
+                 a_x       t_1       t_2      v_1x      v_2x    v_av-x
+combined           X         X         X                   X         X
+combined           X         X         X         X                   X    eq 2.11
+eq_2_7             X         X         X         X         X
+eq_2_10                                          X         X         X
+
+
+
+combined           X         X         X         X                   X
+eq_2_7             X         X         X         X         X
+----------
+combined                     X         X         X         X         X
+
+
+eq_2_7
+eq_2_11 elim a_x
+
+
+eq 2.7:    a_x    = (v_2x - v_1x) / (t_2 - t_1)
+eq 2.11:   v_av-x = v_1x + 1/2 a_x (t_2 - t_1) 
+
+elim a_x
+
+eq 2.11 /. eq 2.7 :
+
+v_av-x = v_1x + 1/2 ((v_2x - v_1x) / (t_2 - t_1)) (t_2 - t_1) 
+
+v_av-x = v_1x + 1/2 (v_2x - v_1x)
+
+v_av-x = v_1x + 1/2 v_2x - 1/2 v_1x
+
+v_av-x = 1/2 v_1x + 1/2 v_2x
+
+v_av-x = 1/2 (v_1x + v_2x)
+----------------------------------------------------------------------
+eq 2.7:
+
+a_x = (v_2x - v_1x) / (t_2 - t_1)
+
+solve for (t_2 - t_1):
+
+(t_2 - t_1) = (v_2x - v_1x) / a_x
+
+eq 2.11:
+
+v_av-x = v_1x + 1/2 a_x (t_2 - t_1) 
+
+/. eq 2.7 solved for (t_2 - t_1):
+
+v_av-x = v_1x + 1/2 a_x (v_2x - v_1x) / a_x
+
+v_av-x = v_1x + 1/2 (v_2x - v_1x)
+...
+v_av-x = 1/2 (v_1x + v_2x)
+----------------------------------------------------------------------
+eq 2.7 + eq 2.11    elim v_1x
+
+eq 2.7:
+
+a_x = (v_2x - v_1x) / (t_2 - t_1)
+
+a_x (t_2 - t_1) = v_2x - v_1x
+
+v_1x + a_x (t_2 - t_1) = v_2x
+
+v_1x = v_2x - a_x (t_2 - t_1)
+
+eq 2.11:
+
+v_av-x = v_1x + 1/2 a_x (t_2 - t_1) 
+
+/. eq 2.7 solved for v_1x
+
+v_av-x = (v_2x - a_x (t_2 - t_1)) + 1/2 a_x (t_2 - t_1) 
+

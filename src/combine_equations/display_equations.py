@@ -1,9 +1,9 @@
 
 import sympy as sp
 
-def display_equations(equations):
-    for eq in equations:
-        print(f'{eq.lhs} = {eq.rhs}')
+# def display_equations(equations):
+#     for eq in equations:
+#         print(f'{eq.lhs} = {eq.rhs}')
 
 def red_text(s):
     RED = "\x1b[31m"
@@ -33,4 +33,6 @@ def display_equation_(eq, values=None, want=None):
 
 def display_equations_(equations, values=None, want=None):
     for eq in equations:
+        if eq == True:
+            continue
         display_equation_(eq, values, want)

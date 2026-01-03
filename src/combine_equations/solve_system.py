@@ -75,6 +75,8 @@ def solve_system_2(equations, values, want):
 
     unknowns = list(unknowns)
 
+    print("Solving for unknowns:", unknowns)
+
     result = sp.solve(equations, unknowns, dict=True)
     
     return sp.Eq(want, result[0][want])

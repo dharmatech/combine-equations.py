@@ -78,5 +78,25 @@ def solve_system_2(equations, values, want):
     print("Solving for unknowns:", unknowns)
 
     result = sp.solve(equations, unknowns, dict=True)
+
+    # from pprint import pprint
+    # pprint(result, sort_dicts=False)
     
     return sp.Eq(want, result[0][want])
+
+def solve_system_multiple_solutions(equations, values, want):
+
+    unknowns = connected_unknowns(equations, values, want)
+
+    unknowns = list(unknowns)
+
+    print("Solving for unknowns:", unknowns)
+
+    solutions = sp.solve(equations, unknowns, dict=True)
+
+    results = []
+    
+    for item in solutions:
+        results.append(sp.Eq(want, item[want]))
+    
+    return results

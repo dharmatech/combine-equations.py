@@ -146,20 +146,35 @@ values[b1.pos.y] =  5.0  # m
 
 display_equations_(eqs, values, want=b1.vel.y)
 
-# equations = eqs
-# want = b1.vel.y
+solve_and_display_(eqs, values, want=b1.vel.y)
 
-solve_and_display(eqs, values, want=b1.vel.y)
+# Solution 1:
 # b_1_v_y = -sqrt(2*a_y_b_0_1*b_1_y + b_0_v_y**2)
 # b_1_v_y = -11.2694276695846
+# 
+# Solution 2:
+# b_1_v_y = sqrt(2*a_y_b_0_1*b_1_y + b_0_v_y**2)
+# b_1_v_y = 11.2694276695846
 
-# We should get two solutions here.
+# ----------------------------------------------------------------------
+# (c) the maximum height reached;
+# ----------------------------------------------------------------------
 
-# tmp = solve_system_multiple_solutions(eqs, values, want=b1.vel.y)
+values = {}
 
-# for index, sol in enumerate(tmp):
-#     print(f"Solution {index+1}:")
-#     display_equation_(sol, values, want=b1.vel.y)
-#     display_equation_(sol.subs(values), values, want=b1.vel.y)
+values[b0.vel.y] = 15.0  # initial velocity m/s
+values[b01.a.y]  = -9.8  # constant acceleration m/s^2
+values[b1.vel.y] =  0.0  # final velocity m/s
 
-solve_and_display_(eqs, values, want=b1.vel.y)
+display_equations_(eqs, values, want=b1.pos.y)
+
+solve_and_display_(eqs, values, want=b1.pos.y)
+# b_1_y = (-b_0_v_y**2 + b_1_v_y**2)/(2*a_y_b_0_1)
+# b_1_y = 11.4795918367347
+
+# ----------------------------------------------------------------------
+# (d) the ball’s acceleration when it is at its maximum height.
+# ----------------------------------------------------------------------
+
+# Acceleration is constant
+# So: a = -g

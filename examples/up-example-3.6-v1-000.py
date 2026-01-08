@@ -117,42 +117,78 @@ display_equations_(eqs, values)
 # Find the motorcycle’s position
 # ----------------------------------------------------------------------
 
-want = m1.pos.x
-
-display_equations_(eqs, values, want=m1.pos.x)
-
-# tmp = eqs
-# tmp, _ = eliminate_variable_subst(tmp, m01.dt)
-# tmp, _ = eliminate_variable_subst(tmp, m01.a.y)
-# tmp, _ = eliminate_variable_subst(tmp, m01.v_av.x)
-# tmp, _ = eliminate_variable_subst(tmp, m01.v_av.y)
-# tmp, _ = eliminate_variable_subst(tmp, m1.vel.y)
-
-# display_equations_(tmp, values, want=m1.pos.x)
-
-# solve_and_display_(tmp, values, want=m1.pos.x)
-
-# equations = tmp
-# want = m1.pos.x
-
-# var = m1.pos.x
-# max_passes = 10
-
-# eq = eqs[0]
-# eq = eqs[1]
-
-# tmp, _ = eliminate_variable_subst(tmp, m1.pos.y)
-
-# display_equations_(tmp, values, want=want)
-
-# values
-# want
-# solve_and_display_(tmp, values, want=want)
-
 
 
 solve_and_display_(eqs, values, want=m1.pos.x)
+# m_1_x = m_1_t*(m_0_v_x + m_1_v_x)/2
+# m_1_x = 4.50000000000000
+solve_and_display_(eqs, values, want=m1.pos.y)
+# m_1_y = m_1_t*(-g*m_1_t + 2*m_0_v_y)/2
+# m_1_y = -1.22500000000000
 
-display_equations_(eqs, values, want=want)
+display_equations_(eqs, values, want=m1.pos.x)
 
 # display_equations_(equations, values, want=want)
+
+# ----------------------------------------------------------------------
+# distance from the edge of the cliff
+# ----------------------------------------------------------------------
+
+# tmp = sp.sqrt(m1.pos.x**2 + m1.pos.y**2)
+
+dist = sp.symbols('dist')
+
+eqs += eq_flat(
+    dist, sp.sqrt(m1.pos.x**2 + m1.pos.y**2)
+)
+
+display_equations_(eqs, values, want=dist)
+
+solve_and_display_(eqs, values, want=dist)
+# dist = sqrt(m_1_t**2*((m_0_v_x + m_1_v_x)**2 + (g*m_1_t - 2*m_0_v_y)**2))/2
+# dist = 4.66375653309647
+
+# ----------------------------------------------------------------------
+# velocity
+# ----------------------------------------------------------------------
+
+display_equations_(eqs, values)
+
+# m1.vel
+
+# vel_mag = sp.sqrt(m1.vel.x**2 + m1.vel.y**2)
+# vel_angle = sp.atan2(m1.vel.y, m1.vel.x)
+
+vel_mag = sp.symbols('vel_mag')
+vel_angle = sp.symbols('vel_angle')
+
+
+eqs += eq_flat(
+    vel_mag, sp.sqrt(m1.vel.x**2 + m1.vel.y**2),
+    vel_angle, sp.atan2(m1.vel.y, m1.vel.x)
+)
+
+display_equations_(eqs, values, want=vel_mag)
+
+solve_and_display_(eqs, values, want=vel_mag)
+# vel_mag = sqrt(m_1_v_x**2 + (g*m_1_t - m_0_v_y)**2)
+# vel_mag = 10.2474387043788
+
+display_equations_(eqs, values, want=vel_angle)
+solve_and_display_(eqs, values, want=vel_angle)
+# vel_angle = atan2(-g*m_1_t + m_0_v_y, m_1_v_x)
+# vel_angle = -0.498567905638218
+
+vel_angle_deg = sp.symbols('vel_angle_deg')
+
+eqs += eq_flat(
+    vel_angle_deg, vel_angle * 180 / sp.pi
+)
+
+values[sp.pi] = sp.N(sp.pi)
+
+display_equations_(eqs, values, want=vel_angle_deg)
+solve_and_display_(eqs, values, want=vel_angle_deg)
+# vel_angle_deg = 180*atan2(-g*m_1_t + m_0_v_y, m_1_v_x)/pi
+# vel_angle_deg = -28.5658367937466
+

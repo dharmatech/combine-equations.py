@@ -84,6 +84,55 @@ def solve_system_2(equations, values, want):
     
     return sp.Eq(want, result[0][want])
 
+# def solve_system_multiple_solutions(equations, values, want):
+
+#     unknowns = connected_unknowns(equations, values, want)
+
+#     unknowns = list(unknowns)
+
+#     print("Solving for unknowns:", unknowns)
+
+#     solutions = sp.solve(equations, unknowns, dict=True)
+
+#     if len(solutions) == 0:
+#         raise ValueError("No solutions found.")
+   
+#     # print("Raw solutions:", solutions)
+
+#     results = []
+    
+#     for item in solutions:
+#         results.append(sp.Eq(want, item[want]))
+    
+#     return results
+
+
+
+
+def clear_zero_denominators(eqs):
+    out = []
+    for eq in eqs:
+        if not isinstance(eq, sp.Equality):
+            out.append(eq)
+            continue
+
+        # Only do this for Eq(expr, 0) or Eq(0, expr)
+        lhs, rhs = eq.lhs, eq.rhs
+        if sp.simplify(rhs) == 0:
+            expr = sp.together(lhs)
+            num, den = sp.fraction(expr)
+            out.append(sp.Eq(sp.simplify(num), 0))
+        elif sp.simplify(lhs) == 0:
+            expr = sp.together(rhs)
+            num, den = sp.fraction(expr)
+            out.append(sp.Eq(sp.simplify(num), 0))
+        else:
+            out.append(eq)
+
+    return out
+
+
+
 def solve_system_multiple_solutions(equations, values, want):
 
     unknowns = connected_unknowns(equations, values, want)
@@ -92,7 +141,14 @@ def solve_system_multiple_solutions(equations, values, want):
 
     print("Solving for unknowns:", unknowns)
 
+    equations = clear_zero_denominators(equations)
+
     solutions = sp.solve(equations, unknowns, dict=True)
+
+    if len(solutions) == 0:
+        raise ValueError("No solutions found.")
+   
+    # print("Raw solutions:", solutions)
 
     results = []
     

@@ -90,6 +90,10 @@ def eliminate_variable_subst(equations, var, max_passes=10):
                 continue
             try:
                 sols = sp.solve(eq, var)
+
+                if len(sols) == 0:
+                    print("Warning: No solutions found when solving for variable.")
+                    print(f"Equation: {eq}, Variable: {var}")
             except Exception:
                 continue
             for s in sols:

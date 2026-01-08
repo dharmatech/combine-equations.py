@@ -178,3 +178,29 @@ solve_and_display_(eqs, values, want=b1.pos.y)
 
 # Acceleration is constant
 # So: a = -g
+
+# ----------------------------------------------------------------------
+# Example 2.8
+#
+# At what time after being released
+# has the ball in Example 2.7 
+# fallen 5.00 m below the roof railing?
+
+values = {}
+
+values[b0.vel.y] = 15.0  # initial  velocity     (m/s)
+values[b01.a.y]  = -9.8  # constant acceleration (m/s^2)
+values[b1.pos.y] = -5.0  # final    position     (m)
+
+display_equations_(eqs, values, want=b1.t)
+
+solve_and_display_(eqs, values, want=b1.t)
+
+# Solution 1:
+# b_1_t = (-b_0_v_y - sqrt(2*a_y_b_0_1*b_1_y + b_0_v_y**2))/a_y_b_0_1
+# b_1_t = 3.36451028118484
+# 
+# Solution 2:
+# b_1_t = (-b_0_v_y + sqrt(2*a_y_b_0_1*b_1_y + b_0_v_y**2))/a_y_b_0_1
+# b_1_t = -0.303285791388921
+

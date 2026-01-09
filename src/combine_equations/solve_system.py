@@ -2,48 +2,48 @@
 from combine_equations.misc import combine_equations_sp
 from combine_equations.misc import isolate_variable
 
-def solve_system(equations, values, want):
-    knowns = list(values.keys())
-    tmp = equations[0]
-    for eq in equations[1:]:
-        elim_candidates = tmp.free_symbols.intersection(eq.free_symbols)
-        elim_candidates = elim_candidates.difference(knowns).difference({want})
-        if not elim_candidates:
-            raise ValueError("No suitable variable to eliminate found.")
-        elim = elim_candidates.pop()
-        tmp = combine_equations_sp(tmp, eq, elim)
-    return isolate_variable(tmp, want)
+# def solve_system(equations, values, want):
+#     knowns = list(values.keys())
+#     tmp = equations[0]
+#     for eq in equations[1:]:
+#         elim_candidates = tmp.free_symbols.intersection(eq.free_symbols)
+#         elim_candidates = elim_candidates.difference(knowns).difference({want})
+#         if not elim_candidates:
+#             raise ValueError("No suitable variable to eliminate found.")
+#         elim = elim_candidates.pop()
+#         tmp = combine_equations_sp(tmp, eq, elim)
+#     return isolate_variable(tmp, want)
 
 
 
 
 
-def solve_system_alt(equations, values, want):
+# def solve_system_alt(equations, values, want):
 
-    knowns = list(values.keys())
+#     knowns = list(values.keys())
 
-    def check(eq, want):
-        eq_has_want = want in eq.free_symbols
+#     def check(eq, want):
+#         eq_has_want = want in eq.free_symbols
 
-        eq_can_solve = eq.free_symbols.difference(knowns).difference({want}) == set()
+#         eq_can_solve = eq.free_symbols.difference(knowns).difference({want}) == set()
 
-        return eq_has_want and eq_can_solve
+#         return eq_has_want and eq_can_solve
     
-    tmp = next((eq for eq in equations if check(eq, want)), None)
+#     tmp = next((eq for eq in equations if check(eq, want)), None)
 
-    if tmp is not None:
-        tmp = solve_system([tmp], values, want=want)
-        return tmp
+#     if tmp is not None:
+#         tmp = solve_system([tmp], values, want=want)
+#         return tmp
         
-    tmp = equations[0]
-    for eq in equations[1:]:
-        elim_candidates = tmp.free_symbols.intersection(eq.free_symbols)
-        elim_candidates = elim_candidates.difference(knowns).difference({want})
-        if not elim_candidates:
-            raise ValueError("No suitable variable to eliminate found.")
-        elim = elim_candidates.pop()
-        tmp = combine_equations_sp(tmp, eq, elim)
-    return isolate_variable(tmp, want)
+#     tmp = equations[0]
+#     for eq in equations[1:]:
+#         elim_candidates = tmp.free_symbols.intersection(eq.free_symbols)
+#         elim_candidates = elim_candidates.difference(knowns).difference({want})
+#         if not elim_candidates:
+#             raise ValueError("No suitable variable to eliminate found.")
+#         elim = elim_candidates.pop()
+#         tmp = combine_equations_sp(tmp, eq, elim)
+#     return isolate_variable(tmp, want)
 
 
 
@@ -69,20 +69,20 @@ def connected_unknowns(equations, values, want):
     return needed  # includes want
 
 
-def solve_system_2(equations, values, want):
+# def solve_system_2(equations, values, want):
 
-    unknowns = connected_unknowns(equations, values, want)
+#     unknowns = connected_unknowns(equations, values, want)
 
-    unknowns = list(unknowns)
+#     unknowns = list(unknowns)
 
-    print("Solving for unknowns:", unknowns)
+#     print("Solving for unknowns:", unknowns)
 
-    result = sp.solve(equations, unknowns, dict=True)
+#     result = sp.solve(equations, unknowns, dict=True)
 
-    # from pprint import pprint
-    # pprint(result, sort_dicts=False)
+#     # from pprint import pprint
+#     # pprint(result, sort_dicts=False)
     
-    return sp.Eq(want, result[0][want])
+#     return sp.Eq(want, result[0][want])
 
 # def solve_system_multiple_solutions(equations, values, want):
 

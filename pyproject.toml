@@ -9,8 +9,16 @@ authors = [
 requires-python = ">=3.14"
 dependencies = []
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+]
+
 [project.scripts]
 combine-equations = "combine_equations:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [build-system]
 requires = ["uv_build>=0.9.6,<0.10.0"]

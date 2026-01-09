@@ -115,16 +115,21 @@ eqs += eq_flat(
 pprint(b0)
 
 values[b0_vel_mag] = 37.0 # m/s
-values[b0_vel_angle] = sp.rad(53.1) # degrees to radians
+# values[b0_vel_angle] = sp.rad(53.1) # degrees to radians
+values[b0_vel_angle] = sp.N(sp.rad(53.1)) # degrees to radians
 # ----------------------------------------------------------------------
 # (a) Find the position of the ball 
 # and its velocity (magnitude and direction) 
 # at t = 2.00 s.
+# ----------------------------------------------------------------------
 
 values_a = values.copy()
 
 values_a[b1.t] = 2.00 # s
 
+# ----------------------------------------------------------------------
+# position
+# ----------------------------------------------------------------------
 display_equations_(eqs, values_a, want=b1.pos.x)
 solve_and_display_(eqs, values_a, want=b1.pos.x)
 # b_1_x = b0_vel_mag*b_1_t*cos(b0_vel_angle)
@@ -135,6 +140,10 @@ solve_and_display_(eqs, values_a, want=b1.pos.y)
 # b_1_y = b_1_t*(2*b0_vel_mag*sin(b0_vel_angle) - b_1_t*g)/2
 # b_1_y = 39.5566647280447
 
+# ----------------------------------------------------------------------
+# velocity components
+# ----------------------------------------------------------------------
+
 display_equations_(eqs, values_a, want=b1.vel.x)
 solve_and_display_(eqs, values_a, want=b1.vel.x)
 # b_1_v_x = b0_vel_mag*cos(b0_vel_angle)
@@ -144,6 +153,10 @@ display_equations_(eqs, values_a, want=b1.vel.y)
 solve_and_display_(eqs, values_a, want=b1.vel.y)
 # b_1_v_y = b0_vel_mag*sin(b0_vel_angle) - b_1_t*g
 # b_1_v_y = 9.96833236402235
+
+# ----------------------------------------------------------------------
+# velocity magnitude and angle
+# ----------------------------------------------------------------------
 
 b1_vel_mag = sp.symbols('b1_vel_mag')
 b1_vel_angle = sp.symbols('b1_vel_angle')
@@ -164,15 +177,11 @@ solve_and_display_(eqs, values_a, want=b1_vel_angle)
 # b1_vel_angle = 0.421780406158419
 
 
-
-
-
 b1_vel_angle_deg = sp.symbols('b1_vel_angle_deg')
 
 eqs += eq_flat(
     b1_vel_angle_deg, sp.deg(b1_vel_angle)
 )
-
 
 
 display_equations_(eqs, values_a, want=b1_vel_angle_deg)
@@ -183,10 +192,70 @@ tmp, _ = eliminate_variable_subst(eqs, b1_vel_angle)
 display_equations_(tmp, values_a, want=b1_vel_angle_deg)
 eqs = tmp
 
-
-
 display_equations_(eqs, values_a, want=b1_vel_angle_deg)
 solve_and_display_(eqs, values_a, want=b1_vel_angle_deg)
 # b1_vel_angle_deg = 180*atan2(b0_vel_mag*sin(b0_vel_angle) - b_1_t*g, b0_vel_mag*cos(b0_vel_angle))/pi
 # b1_vel_angle_deg = 24.1662371541911
+
+# ----------------------------------------------------------------------
+# (b) Find the time 
+# when the ball reaches the highest point of its flight, 
+# and its height h at this time.
+# ----------------------------------------------------------------------
+
+values_b = values.copy()
+
+# At highest point, vertical velocity is zero.
+# values_b[b1.vel.y] = 0
+
+eqs_b = eqs.copy()
+
+eqs_b += eq_flat(
+    b1.vel.y, 0
+)
+
+display_equations_(eqs_b, values_b, want=b1.t)
+solve_and_display_(eqs_b, values_b, want=b1.t)
+# b_1_t = b0_vel_mag*sin(b0_vel_angle)/g
+# b_1_t = 3.01613989439575
+
+# height at this time
+
+display_equations_(eqs_b, values_b, want=b1.pos.y)
+solve_and_display_(eqs_b, values_b, want=b1.pos.y)
+# b_1_y = b0_vel_mag**2*sin(b0_vel_angle)**2/(2*g)
+# b_1_y = 44.6212748258844
+
+# ----------------------------------------------------------------------
+# (c) Find the horizontal range R
+# that is, the horizontal distance
+# from the starting point to where the ball hits the ground
+# and the ball’s velocity just before it hits.
+# ----------------------------------------------------------------------
+
+values_c = values.copy()
+
+# At ground, vertical position is zero.
+
+eqs_c = eqs.copy()
+eqs_c += eq_flat(
+    b1.pos.y, 0
+)
+
+display_equations_(eqs_c, values_c, want=b1.pos.x)
+solve_and_display_(eqs_c, values_c, want=b1.pos.x)
+# b_1_x = b0_vel_mag**2*sin(2*b0_vel_angle)/g
+# b_1_x = 134.010403230554
+
+# ball's velocity just before it hits
+
+display_equations_(eqs_c, values_c, want=b1.vel.x)
+solve_and_display_(eqs_c, values_c, want=b1.vel.x)
+# b_1_v_x = b0_vel_mag*cos(b0_vel_angle)
+# b_1_v_x = 22.2155483370577
+
+display_equations_(eqs_c, values_c, want=b1.vel.y)
+solve_and_display_(eqs_c, values_c, want=b1.vel.y)
+# b_1_v_y = -b0_vel_mag*sin(b0_vel_angle)
+# b_1_v_y = -29.5883323640224
 

@@ -33,6 +33,10 @@ class Point3:
     x: sp.Symbol
     y: sp.Symbol
     z: sp.Symbol
+    
+    # optional propertys for polar/magnitude-angle representation
+    mag: sp.Symbol | None = None
+    angle: sp.Symbol | None = None
 
     def get(self, axis: Axis) -> sp.Symbol:
         return getattr(self, axis)
@@ -134,6 +138,9 @@ def make_states_model(
             x=sp.Symbol(f"{prefix}_{i}_v_x"),
             y=sp.Symbol(f"{prefix}_{i}_v_y"),
             z=sp.Symbol(f"{prefix}_{i}_v_z"),
+
+            mag=sp.Symbol(f"{prefix}_{i}_v_mag"),
+            angle=sp.Symbol(f"{prefix}_{i}_v_angle"),
         )
         t = sp.Symbol(f"{prefix}_{i}_t")
         states.append(State(pos=pos, vel=vel, t=t))

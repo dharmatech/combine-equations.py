@@ -26,7 +26,6 @@ from combine_equations.kinematics_states import (
     kinematics_fundamental,
 )
 
-from combine_equations.solve_system import solve_system_2
 from combine_equations.solve_system import solve_system_multiple_solutions
 from combine_equations.display_equations import display_equation_
 from combine_equations.display_equations import display_equations_
@@ -46,11 +45,6 @@ def eliminate_zero_eqs(equations):
         var = eq.lhs
         tmp, _ = eliminate_variable_subst(tmp, var)
     return tmp
-
-def solve_and_display(equations, values, want):
-    tmp = solve_system_2(equations, values, want)
-    display_equation_(tmp, values, want=want)
-    display_equation_(tmp.subs(values), values, want=want)
 
 def solve_and_display_(equations, values, want):
     

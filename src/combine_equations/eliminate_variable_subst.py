@@ -76,6 +76,11 @@ def cleanup_equations(eqs):
 
 #     return eqs, replacement
 
+# equations = tmp
+# var = b1.vel.x
+# eq = eqs[0]
+
+# s = sols[0]
 
 def eliminate_variable_subst(equations, var, max_passes=10):
     eqs = list(equations)

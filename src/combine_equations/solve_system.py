@@ -49,6 +49,55 @@ from combine_equations.misc import isolate_variable
 
 import sympy as sp
 
+def _safe_simplify(expr):
+    try:
+        return sp.simplify(expr)
+    except Exception:
+        return expr
+
+def _is_false_expr(expr):
+    return expr is False or expr == sp.S.false
+
+def _is_true_expr(expr):
+    return expr is True or expr == sp.S.true
+
+def filter_equations_for_unknowns(equations, unknowns, equations_sub=None):
+    if equations_sub is None:
+        equations_sub = equations
+    if len(equations_sub) != len(equations):
+        raise ValueError("equations_sub must be the same length as equations.")
+
+    filtered = []
+    for eq, eq_sub in zip(equations, equations_sub):
+        if _is_true_expr(eq_sub):
+            continue
+        if _is_false_expr(eq_sub):
+            raise ValueError("Inconsistent equation: False.")
+
+        eq_sub_symbols = getattr(eq_sub, "free_symbols", set())
+        if eq_sub_symbols & unknowns:
+            filtered.append(eq)
+            continue
+
+        if isinstance(eq_sub, sp.Equality):
+            diff = _safe_simplify(eq_sub.lhs - eq_sub.rhs)
+            if getattr(diff, "free_symbols", set()):
+                continue
+            if _safe_simplify(diff) == 0:
+                continue
+            raise ValueError("Inconsistent equation with no unknowns.")
+
+        simplified = _safe_simplify(eq_sub)
+        if getattr(simplified, "free_symbols", set()):
+            continue
+        if simplified == 0 or _is_true_expr(simplified):
+            continue
+        if _is_false_expr(simplified):
+            raise ValueError("Inconsistent equation with no unknowns.")
+        raise ValueError("Inconsistent equation with no unknowns.")
+
+    return filtered
+
 def connected_unknowns(equations, values, want):
     knowns = set(values.keys())
     eqs = [eq.subs(values) for eq in equations]
@@ -133,7 +182,7 @@ def clear_zero_denominators(eqs):
 
 
 
-def solve_system_multiple_solutions(equations, values, want):
+def solve_system_multiple_solutions(equations, values, want, check_knowns=False):
 
     unknowns = connected_unknowns(equations, values, want)
 
@@ -142,6 +191,10 @@ def solve_system_multiple_solutions(equations, values, want):
     print("Solving for unknowns:", unknowns)
 
     equations = clear_zero_denominators(equations)
+    equations_sub = None
+    if check_knowns:
+        equations_sub = [eq.subs(values) for eq in equations]
+    equations = filter_equations_for_unknowns(equations, set(unknowns), equations_sub)
 
     solutions = sp.solve(equations, unknowns, dict=True)
 

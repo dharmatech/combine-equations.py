@@ -1,12 +1,19 @@
 import sympy as sp
 
+
+def _safe_simplify(expr):
+    try:
+        return sp.simplify(expr)
+    except Exception:
+        return expr
+
 def _is_tautology(eq):
     # Covers Python bool, SymPy BooleanTrue, and Eq(x, x)
     if eq is True or eq == sp.S.true:
         return True
     if isinstance(eq, sp.Equality):
         # If lhs-rhs simplifies to 0, it's tautological
-        return sp.simplify(eq.lhs - eq.rhs) == 0
+        return _safe_simplify(eq.lhs - eq.rhs) == 0
     return False
 
 def cleanup_equations(eqs):
@@ -105,7 +112,7 @@ def eliminate_variable_subst(equations, var, max_passes=10):
                 s = sp.sympify(s)
                 if var in s.free_symbols:
                     continue
-                candidates.append(sp.simplify(s))
+                candidates.append(_safe_simplify(s))
 
         if not candidates:
             break
@@ -113,7 +120,11 @@ def eliminate_variable_subst(equations, var, max_passes=10):
         candidates.sort(key=sp.count_ops)
         replacement = candidates[0]
 
-        eqs = [sp.simplify(e.subs({var: replacement})) for e in eqs]
+
+        # https://github.com/sympy/sympy/issues/28926
+        # Once this is fixed, try regular sp.simplify again
+        # instead of _safe_simplify
+        eqs = [_safe_simplify(e.subs({var: replacement})) for e in eqs]
         eqs = cleanup_equations(eqs)
 
         if all((not isinstance(e, sp.Equality)) or (var not in e.free_symbols) for e in eqs):

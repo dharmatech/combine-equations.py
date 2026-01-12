@@ -37,9 +37,9 @@ def eliminate_zero_eqs(equations):
         tmp, _ = eliminate_variable_subst(tmp, var)
     return tmp
 
-def solve_and_display_(equations, values, want):
+def solve_and_display_(equations, values, want, check_knowns=True):
     
-    tmp = solve_system_multiple_solutions(equations, values, want)
+    tmp = solve_system_multiple_solutions(equations, values, want, check_knowns=check_knowns)
     
     for index, sol in enumerate(tmp):
         if len(tmp) > 1:
@@ -115,19 +115,91 @@ values[b0.vel.angle] = sp.N(sp.rad(-20.0)) # degrees to radians
 # ----------------------------------------------------------------------
 # How far horizontally from your window will the
 # ball hit the ground? Ignore air resistance.
+# ----------------------------------------------------------------------
+# If we use the solver directly, it reports no solutions found.
+display_equations_(eqs, values, want=b1.pos.x)
+# b_1_t = dt_b_0_1
+# v_av_x_b_0_1 = b_1_x/dt_b_0_1
+# v_av_y_b_0_1 = -b_0_y/dt_b_0_1
+# (-b_0_v_x + b_1_v_x)/dt_b_0_1 = 0
+# a_y_b_0_1 = (-b_0_v_y + b_1_v_y)/dt_b_0_1
+# b_0_v_x = -b_1_v_x + 2*v_av_x_b_0_1
+# b_0_v_y = -b_1_v_y + 2*v_av_y_b_0_1
+# a_y_b_0_1 = -g
+# b_0_v_x = b_1_v_x
+# b_0_v_x = b_0_v_mag*cos(b_0_v_angle)
+# b_0_v_y = b_0_v_mag*sin(b_0_v_angle)
+# b_0_v_mag = sqrt(b_0_v_x**2 + b_0_v_y**2)
+# b_0_v_angle = atan2(b_0_v_y, b_0_v_x)
+solve_and_display_(eqs, values, want=b1.pos.x)
+# ValueError: No solutions found.
+# ----------------------------------------------------------------------
+# If we manually eliminate variables, we can eventually get the solution.
+tmp = eqs
 
-# tmp, _ = eliminate_variable_subst(eqs, b0.vel.x)
-
-# tmp, _ = eliminate_variable_subst(eqs, b0.vel.x)
-# tmp, _ = eliminate_variable_subst(tmp, b0.vel.y)
-
-tmp, _ = eliminate_variable_subst(eqs, b01.dt)
+# tmp, _ = eliminate_variable_subst(tmp, b01.dt)
 tmp, _ = eliminate_variable_subst(tmp, b01.v_av.x)
 tmp, _ = eliminate_variable_subst(tmp, b01.v_av.y)
 tmp, _ = eliminate_variable_subst(tmp, b01.a.y)
 tmp, _ = eliminate_variable_subst(tmp, b0.vel.x)
 tmp, _ = eliminate_variable_subst(tmp, b0.vel.y)
 tmp, _ = eliminate_variable_subst(tmp, b1.vel.x)
+tmp, _ = eliminate_variable_subst(tmp, b1.vel.y)
+tmp, _ = eliminate_variable_subst(tmp, b1.t)
+
+display_equations_([tmp[0]], values, want=b1.pos.x)
+# b_0_v_mag*sin(b_0_v_angle) = b_1_x*g/(b_0_v_mag*cos(b_0_v_angle)) - b_0_v_mag*sin(2*b_0_v_angle)/(2*cos(b_0_v_angle)) - 2*b_0_v_mag*b_0_y*cos(b_0_v_angle)/b_1_x
+solve_and_display_([tmp[0]], values, want=b1.pos.x)
+# Solving for unknowns: [b_1_x]
+# Solution 1:
+# b_1_x = b_0_v_mag*(b_0_v_mag*sin(b_0_v_angle) - sqrt(b_0_v_mag**2*sin(b_0_v_angle)**2 + 2*b_0_y*g))*cos(b_0_v_angle)/g
+# b_1_x = -15.7161745661753
+# Solution 2:
+# b_1_x = b_0_v_mag*(b_0_v_mag*sin(b_0_v_angle) + sqrt(b_0_v_mag**2*sin(b_0_v_angle)**2 + 2*b_0_y*g))*cos(b_0_v_angle)/g
+# b_1_x = 9.16380341748480
+# ----------------------------------------------------------------------
+# If we eliminate variables until we're down to 3 equations,
+# we still get an error.
+# However, interestingly, the first equations can be solved for b1.pos.x.
+# We in fact do so above.
+
+display_equations_(tmp, values, want=b1.pos.x)
+# b_0_v_mag*sin(b_0_v_angle) = b_1_x*g/(b_0_v_mag*cos(b_0_v_angle)) - b_0_v_mag*sin(2*b_0_v_angle)/(2*cos(b_0_v_angle)) - 2*b_0_v_mag*b_0_y*cos(b_0_v_angle)/b_1_x
+# b_0_v_mag = sqrt(b_0_v_mag**2)
+# b_0_v_angle = atan2(b_0_v_mag*sin(b_0_v_angle), b_0_v_mag*cos(b_0_v_angle))
+solve_and_display_(tmp, values, want=b1.pos.x, check_knowns=False)
+# IndexError: Index out of range: a[1]
+# ----------------------------------------------------------------------
+
+# equations = tmp
+# want = b1.pos.x
+
+
+display_equations_([tmp[1]], values)
+
+sp.simplify([tmp[1]])
+
+sp.simplify(sp.sqrt(b1.t**2))
+
+tmp[1].free_symbols
+
+# Drop any equations whose free symbols don’t intersect the unknowns;
+# if they simplify to False, error out as inconsistent.
+
+tmp[2].free_symbols
+
+x = sp.symbols('x', real=True, positive=True)
+x = sp.symbols('x', positive=True)
+x = sp.symbols('x', real=True)
+x = sp.symbols('x')
+
+sp.sqrt(x**2)
+
+
+
+
+
+
 
 display_equations_(tmp, values, want=b1.pos.x)
 eqs = tmp
@@ -135,6 +207,20 @@ eqs = tmp
 display_equations_(eqs, values, want=b1.pos.x)
 solve_and_display_(eqs, values, want=b1.pos.x)
 
+display_equation_(eqs[0], values)
+
+sp.solve(eqs[0], b1.t)
+
+solve_and_display_([eqs[0]], values, want=b1.t)
+# Solving for unknowns: [b_1_t]
+#
+# Solution 1:
+# b_1_t = (b_0_v_mag*sin(b_0_v_angle) - sqrt(b_0_v_mag**2*sin(b_0_v_angle)**2 + 2*b_0_y*g))/g
+# b_1_t = -1.67248036416750
+#
+# Solution 2:
+# b_1_t = (b_0_v_mag*sin(b_0_v_angle) + sqrt(b_0_v_mag**2*sin(b_0_v_angle)**2 + 2*b_0_y*g))/g
+# b_1_t = 0.975191590822613
 
 
 # sp.Eq(b_0_v_angle, atan2(b_1_t*g + b_1_v_y, b_1_x/b_1_t))

@@ -131,3 +131,12 @@ def eliminate_variable_subst(equations, var, max_passes=10):
             break
 
     return eqs, replacement
+
+
+def eliminate_zero_eqs(equations):
+    eqs_zero = [eq for eq in equations if eq.rhs == 0]
+    tmp = equations
+    for eq in eqs_zero:
+        var = eq.lhs
+        tmp, _ = eliminate_variable_subst(tmp, var)
+    return tmp

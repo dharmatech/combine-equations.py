@@ -64,6 +64,7 @@ def add_if_new(label, equation, equation_table):
     equation_table[label] = equation
     return True
 
-
-
-
+def eq_flat(*items):
+    if len(items) % 2:
+        raise ValueError(f"eq_flat needs an even number of items; got {len(items)}")
+    return [sp.Eq(items[i], items[i+1]) for i in range(0, len(items), 2)]

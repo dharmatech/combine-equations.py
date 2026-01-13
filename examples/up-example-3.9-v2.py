@@ -15,59 +15,15 @@ import sympy as sp
 from combine_equations.kinematics_states import (
     make_states_model,
     kinematics_fundamental,
+    magnitude_and_angle_equations,
 )
 
-from combine_equations.solve_system import *
-# from combine_equations.solve_system import solve_system_multiple_solutions, solve_system_multiple_solutions_000
-from combine_equations.display_equations import display_equation_
-from combine_equations.display_equations import display_equations_
-from combine_equations.eliminate_variable_subst import eliminate_variable_subst
-
-def eq_flat(*items):
-    if len(items) % 2:
-        raise ValueError(f"eq_flat needs an even number of items; got {len(items)}")
-    return [sp.Eq(items[i], items[i+1]) for i in range(0, len(items), 2)]
-
-# All items in eqs where right rhs is zero.
-
-def eliminate_zero_eqs(equations):
-    eqs_zero = [eq for eq in equations if eq.rhs == 0]
-    tmp = equations
-    for eq in eqs_zero:
-        var = eq.lhs
-        tmp, _ = eliminate_variable_subst(tmp, var)
-    return tmp
-
-def solve_and_display_(equations, values, want, version=1):
-    
-    if version == 1:
-        tmp = solve_system_multiple_solutions(equations, values, want)
-    elif version == 0:
-        tmp = solve_system_multiple_solutions_000(equations, values, want)
-    elif version == 2:
-        tmp = solve_with_elimination_attempts(equations, values, want)
-    else:
-        raise ValueError(f"Unsupported version: {version}")
-    
-    for index, sol in enumerate(tmp):
-        if len(tmp) > 1:
-            print(f"Solution {index+1}:")
-        display_equation_(sol, values, want=want)
-        # display_equation_(sol.subs(values), values, want=want)
-        display_equation_(sp.N(sol.subs(values)), values, want=want)
-
 from combine_equations.kinematics_states import State
-
-def magnitude_and_angle_equations(obj: State) -> list:
-    eqs = eq_flat(
-        obj.vel.x,    obj.vel.mag*sp.cos(obj.vel.angle),
-        obj.vel.y,    obj.vel.mag*sp.sin(obj.vel.angle),
-
-        obj.vel.mag,   sp.sqrt(obj.vel.x**2 + obj.vel.y**2),
-        obj.vel.angle, sp.atan2(obj.vel.y, obj.vel.x)
-    )
-
-    return eqs        
+from combine_equations.solve_system import *
+from combine_equations.display_equations import display_equations_
+from combine_equations.eliminate_variable_subst import eliminate_zero_eqs
+from combine_equations.solve_and_display import solve_and_display_
+from combine_equations.misc import eq_flat
 # ----------------------------------------------------------------------
 
 b = make_states_model('b', 2)
@@ -89,8 +45,7 @@ g = sp.symbols('g')
 
 eqs += eq_flat(
     b0.pos.x, 0,
-    # b0.pos.y, 8.0,
-
+    
     b01.a.x, 0,
     b01.a.y, -g,
 
@@ -125,6 +80,19 @@ values[b0.vel.angle] = sp.N(sp.rad(-20.0)) # degrees to radians
 # ball hit the ground? Ignore air resistance.
 # ----------------------------------------------------------------------
 display_equations_(eqs, values, want=b1.pos.x)
+# b_1_t = dt_b_0_1
+# v_av_x_b_0_1 = b_1_x/dt_b_0_1
+# v_av_y_b_0_1 = -b_0_y/dt_b_0_1
+# (-b_0_v_x + b_1_v_x)/dt_b_0_1 = 0
+# a_y_b_0_1 = (-b_0_v_y + b_1_v_y)/dt_b_0_1
+# b_0_v_x = -b_1_v_x + 2*v_av_x_b_0_1
+# b_0_v_y = -b_1_v_y + 2*v_av_y_b_0_1
+# a_y_b_0_1 = -g
+# b_0_v_x = b_1_v_x
+# b_0_v_x = b_0_v_mag*cos(b_0_v_angle)
+# b_0_v_y = b_0_v_mag*sin(b_0_v_angle)
+# b_0_v_mag = sqrt(b_0_v_x**2 + b_0_v_y**2)
+# b_0_v_angle = atan2(b_0_v_y, b_0_v_x)
 
 solve_and_display_(eqs, values, want=b1.pos.x, version=2)
 

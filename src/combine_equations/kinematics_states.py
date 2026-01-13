@@ -426,3 +426,16 @@ def link_same_position(a: State, b: State, *, axes: Sequence[Axis] | None = None
     for ax in axes_t:
         eqs.append(sp.Eq(a.pos.get(ax), b.pos.get(ax)))
     return eqs
+
+from combine_equations.misc import eq_flat
+
+def magnitude_and_angle_equations(obj: State) -> list:
+    eqs = eq_flat(
+        obj.vel.x,    obj.vel.mag*sp.cos(obj.vel.angle),
+        obj.vel.y,    obj.vel.mag*sp.sin(obj.vel.angle),
+
+        obj.vel.mag,   sp.sqrt(obj.vel.x**2 + obj.vel.y**2),
+        obj.vel.angle, sp.atan2(obj.vel.y, obj.vel.x)
+    )
+
+    return eqs        

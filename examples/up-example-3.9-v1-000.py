@@ -17,7 +17,8 @@ from combine_equations.kinematics_states import (
     kinematics_fundamental,
 )
 
-from combine_equations.solve_system import solve_system_multiple_solutions
+from combine_equations.solve_system import *
+# from combine_equations.solve_system import solve_system_multiple_solutions, solve_system_multiple_solutions_000
 from combine_equations.display_equations import display_equation_
 from combine_equations.display_equations import display_equations_
 from combine_equations.eliminate_variable_subst import eliminate_variable_subst
@@ -37,9 +38,16 @@ def eliminate_zero_eqs(equations):
         tmp, _ = eliminate_variable_subst(tmp, var)
     return tmp
 
-def solve_and_display_(equations, values, want, check_knowns=True):
+def solve_and_display_(equations, values, want, version=1):
     
-    tmp = solve_system_multiple_solutions(equations, values, want, check_knowns=check_knowns)
+    if version == 1:
+        tmp = solve_system_multiple_solutions(equations, values, want)
+    elif version == 0:
+        tmp = solve_system_multiple_solutions_000(equations, values, want)
+    elif version == 2:
+        tmp = solve_with_elimination_attempts(equations, values, want)
+    else:
+        raise ValueError(f"Unsupported version: {version}")
     
     for index, sol in enumerate(tmp):
         if len(tmp) > 1:
@@ -137,7 +145,7 @@ solve_and_display_(eqs, values, want=b1.pos.x)
 # If we manually eliminate variables, we can eventually get the solution.
 tmp = eqs
 
-# tmp, _ = eliminate_variable_subst(tmp, b01.dt)
+tmp, _ = eliminate_variable_subst(tmp, b01.dt)
 tmp, _ = eliminate_variable_subst(tmp, b01.v_av.x)
 tmp, _ = eliminate_variable_subst(tmp, b01.v_av.y)
 tmp, _ = eliminate_variable_subst(tmp, b01.a.y)
@@ -167,9 +175,44 @@ display_equations_(tmp, values, want=b1.pos.x)
 # b_0_v_mag*sin(b_0_v_angle) = b_1_x*g/(b_0_v_mag*cos(b_0_v_angle)) - b_0_v_mag*sin(2*b_0_v_angle)/(2*cos(b_0_v_angle)) - 2*b_0_v_mag*b_0_y*cos(b_0_v_angle)/b_1_x
 # b_0_v_mag = sqrt(b_0_v_mag**2)
 # b_0_v_angle = atan2(b_0_v_mag*sin(b_0_v_angle), b_0_v_mag*cos(b_0_v_angle))
-solve_and_display_(tmp, values, want=b1.pos.x, check_knowns=False)
+solve_and_display_(tmp, values, want=b1.pos.x)
 # IndexError: Index out of range: a[1]
 # ----------------------------------------------------------------------
+tmp = eqs
+
+tmp, _ = eliminate_variable_subst(tmp, b01.v_av.y)
+tmp, _ = eliminate_variable_subst(tmp, b01.a.y)
+tmp, _ = eliminate_variable_subst(tmp, b0.vel.y)
+tmp, _ = eliminate_variable_subst(tmp, b1.vel.y)
+
+display_equations_(tmp, values, want=b1.pos.x)
+solve_and_display_(tmp, values, want=b1.pos.x)
+# ----------------------------------------------------------------------
+tmp = eqs
+
+tmp, removed = eliminate_singleton_equations(tmp, want=b1.pos.x)
+
+tmp, _ = eliminate_variable_subst(tmp, b01.v_av.x)
+
+display_equations_(removed, values, want=b1.pos.x)
+
+display_equations_(tmp, values, want=b1.pos.x)
+
+solve_and_display_(tmp, values, want=b1.pos.x)
+# ----------------------------------------------------------------------
+
+solve_and_display_(eqs, values, want=b1.pos.x, version=2)
+
+
+
+
+
+
+
+
+
+
+
 
 # equations = tmp
 # want = b1.pos.x

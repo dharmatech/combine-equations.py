@@ -48,6 +48,8 @@ from combine_equations.eliminate_variable_subst import eliminate_variable_subst
 
 
 
+import time
+
 import sympy as sp
 
 def _safe_simplify(expr):
@@ -61,6 +63,13 @@ def _is_false_expr(expr):
 
 def _is_true_expr(expr):
     return expr is True or expr == sp.S.true
+
+def _format_elapsed(seconds):
+    if seconds >= 60:
+        minutes = int(seconds // 60)
+        remainder = seconds - (minutes * 60)
+        return f"{minutes}m {remainder:05.2f}s"
+    return f"{seconds:.3f}s"
 
 def eliminate_singleton_equations(equations, want):
     eqs = list(equations)
@@ -244,6 +253,7 @@ def solve_with_elimination_attempts(
     check_knowns=False,
     return_eliminations=False,
 ):
+    start_time = time.monotonic()
     eqs = list(equations)
     eliminations = []
     last_err = None
@@ -256,6 +266,8 @@ def solve_with_elimination_attempts(
                 want,
                 check_knowns=check_knowns,
             )
+            elapsed = time.monotonic() - start_time
+            print(f"Elimination attempts elapsed: {_format_elapsed(elapsed)}")
             if return_eliminations:
                 return solutions, eliminations
             return solutions
@@ -302,6 +314,8 @@ def solve_with_elimination_attempts(
         if not eliminated:
             break
 
+    elapsed = time.monotonic() - start_time
+    print(f"Elimination attempts elapsed: {_format_elapsed(elapsed)}")
     if last_err is not None:
         raise last_err
     raise ValueError("No solutions found.")

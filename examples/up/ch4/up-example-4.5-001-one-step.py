@@ -17,58 +17,12 @@
 from pprint import pprint
 import sympy as sp
 
-from combine_equations.kinematics_states import (
-    make_states_model,
-    kinematics_fundamental,
-    magnitude_and_angle_equations,
-)
-
-from combine_equations.kinematics_states import State
+from combine_equations.kinematics_states import *
 from combine_equations.solve_system import *
 from combine_equations.display_equations import display_equations_
-from combine_equations.eliminate_variable_subst import eliminate_zero_eqs
 from combine_equations.solve_and_display import solve_and_display_
 from combine_equations.misc import eq_flat
-# ----------------------------------------------------------------------
-
-from combine_equations.kinematics_states import Point3
-
-def make_point(prefix: str) -> Point3:
-    return Point3(
-        x = sp.symbols(f"{prefix}_x"),
-        y = sp.symbols(f"{prefix}_y"),
-        z = sp.symbols(f"{prefix}_z"),
-
-        mag = sp.symbols(f"{prefix}_mag"),
-        angle=sp.symbols(f"{prefix}_angle")
-    )
-
-def superposition_equations(R: Point3, forces: list[Point3]):
-    eqs = []
-
-    eqs += eq_flat(
-        R.x, sum(f.x for f in forces),
-        R.y, sum(f.y for f in forces)
-    )
-
-    return eqs
-
-def newtons_second_law(forces: list[Point3], mass: sp.Symbol, acceleration: Point3):
-    # F = m*a
-    eqs = []
-    
-    # for coord in ['x', 'y']:
-    #     eqs += eq_flat(
-    #         sum(getattr(f, coord) for f in forces),
-    #         mass * getattr(acceleration, coord)
-    #     )
-
-    eqs += eq_flat(
-        sum(f.x for f in forces),    mass * acceleration.x,
-        sum(f.y for f in forces),    mass * acceleration.y,
-    )
-
-    return eqs
+from combine_equations.newtons_laws import *
 
 # ----------------------------------------------------------------------
 
@@ -81,6 +35,10 @@ b01 = b.edges[0]
 eqs = kinematics_fundamental(b, axes=['x'])
 
 display_equations_(eqs)
+# dt_b_0_1 = -b_0_t + b_1_t
+# v_av_x_b_0_1 = (-b_0_x + b_1_x)/dt_b_0_1
+# a_x_b_0_1 = (-b_0_v_x + b_1_v_x)/dt_b_0_1
+# v_av_x_b_0_1 = b_0_v_x/2 + b_1_v_x/2
 # ----------------------------------------------------------------------
 values = {}
 
@@ -111,6 +69,13 @@ values[w.x] = 0
 values[m]   = 0.45  # kg
 
 display_equations_(eqs, values, want=f.x)
+# dt_b_0_1 = -b_0_t + b_1_t
+# v_av_x_b_0_1 = (-b_0_x + b_1_x)/dt_b_0_1
+# a_x_b_0_1 = (-b_0_v_x + b_1_v_x)/dt_b_0_1
+# v_av_x_b_0_1 = b_0_v_x/2 + b_1_v_x/2
+# f_x + n_x + w_x = m*a_x
+# f_y + n_y + w_y = m*a_y
+# a_x = a_x_b_0_1
 
 solve_and_display_(eqs, values, want=f.x)
 # f_x = (b_0_v_x**2*m/2 - b_0_x*n_x - b_0_x*w_x - b_1_v_x**2*m/2 + b_1_x*n_x + b_1_x*w_x)/(b_0_x - b_1_x)

@@ -49,6 +49,16 @@ class Point3:
             z=sp.Symbol(f"{prefix}_z"),
         )
 
+def make_point(prefix: str) -> Point3:
+    return Point3(
+        x = sp.symbols(f"{prefix}_x"),
+        y = sp.symbols(f"{prefix}_y"),
+        z = sp.symbols(f"{prefix}_z"),
+
+        mag = sp.symbols(f"{prefix}_mag"),
+        angle=sp.symbols(f"{prefix}_angle")
+    )
+
 
 @dataclass(frozen=True)
 class State:

@@ -80,3 +80,19 @@ display_equations_(eqs, values, want=f.x)
 solve_and_display_(eqs, values, want=f.x)
 # f_x = (b_0_v_x**2*m/2 - b_0_x*n_x - b_0_x*w_x - b_1_v_x**2*m/2 + b_1_x*n_x + b_1_x*w_x)/(b_0_x - b_1_x)
 # f_x = -0.900000000000000
+
+
+
+display_equations_(eqs, values, want=f.x)
+
+tmp = solve_system_multiple_solutions(eqs, values, want=f.x)
+
+display_equations_(tmp)
+
+# { k: v for k, v in values.items() if k in [b0.t, b0.vel.x] }
+
+zero_values = { k: v for k, v in values.items() if v == 0 }
+
+tmp[0].subs(zero_values)
+
+display_equations_([tmp[0].subs(zero_values)])

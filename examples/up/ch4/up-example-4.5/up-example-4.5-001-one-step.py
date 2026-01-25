@@ -83,16 +83,3 @@ solve_and_display_(eqs, values, want=f.x)
 
 
 
-display_equations_(eqs, values, want=f.x)
-
-tmp = solve_system_multiple_solutions(eqs, values, want=f.x)
-
-display_equations_(tmp)
-
-# { k: v for k, v in values.items() if k in [b0.t, b0.vel.x] }
-
-zero_values = { k: v for k, v in values.items() if v == 0 }
-
-tmp[0].subs(zero_values)
-
-display_equations_([tmp[0].subs(zero_values)])

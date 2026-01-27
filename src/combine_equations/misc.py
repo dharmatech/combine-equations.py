@@ -37,6 +37,8 @@ def format_equation(eq, padding=0):
     else:
         return f'{eq.lhs} = {eq.rhs}'
 
+def add_both_sides(eq, addend):
+    return sp.Eq(eq.lhs + addend, eq.rhs + addend)
 
 def multiply_both_sides(eq, factor):
     return sp.Eq(eq.lhs * factor, eq.rhs * factor)

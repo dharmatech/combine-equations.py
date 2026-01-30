@@ -268,7 +268,7 @@ class EquationGUI:
         def on_right_click(event):
             # Only allow operations on the most recent equations
             if history_idx == len(self.history) - 1:
-                self._show_context_menu(event, symbol)
+                self._show_context_menu(event, symbol, eq_idx)
         
         # Bind to the tag range
         tag_name = f"symbol_{history_idx}_{eq_idx}_{start_idx}"
@@ -276,7 +276,7 @@ class EquationGUI:
         text_widget.tag_bind(tag_name, "<Button-1>", on_left_click)
         text_widget.tag_bind(tag_name, "<Button-3>", on_right_click)
         
-    def _show_context_menu(self, event, symbol):
+    def _show_context_menu(self, event, symbol, clicked_eq_idx=None):
         """Show context menu for a symbol."""
         menu = tk.Menu(self.root, tearoff=0)
         
@@ -304,8 +304,17 @@ class EquationGUI:
                 )
             menu.add_cascade(label=f"Eliminate '{symbol}' using...", menu=eliminate_menu)
         
-        # Add "Isolate variable in..." submenu
-        if len(equations_with_symbol) > 0:
+        # Add direct "Isolate" option if user clicked on a specific equation
+        if clicked_eq_idx is not None and clicked_eq_idx < len(current_eqs):
+            clicked_eq = current_eqs[clicked_eq_idx]
+            if clicked_eq != True and isinstance(clicked_eq, sp.Equality) and symbol in clicked_eq.free_symbols:
+                menu.add_command(
+                    label=f"Isolate '{symbol}'",
+                    command=lambda: self._isolate_variable(symbol, clicked_eq, clicked_eq_idx)
+                )
+        
+        # Add "Isolate variable in..." submenu (for choosing different equation)
+        if len(equations_with_symbol) > 1 or (len(equations_with_symbol) == 1 and clicked_eq_idx is None):
             isolate_menu = tk.Menu(menu, tearoff=0)
             for idx, eq in equations_with_symbol:
                 # Create a shortened display of the equation

@@ -54,7 +54,7 @@ display_equations_(tmp, values, want=b01.a.x)
 # ----------------------------------------------------------------------
 # Launch interactive GUI
 # Uncomment to open the GUI version:
-# show_equation_gui(eqs, values, want=b01.a.x, description="Fast Pitch Problem")
+show_equation_gui(eqs, values, want=b01.a.x, description="Fast Pitch Problem")
 
 show_equation_gui(eqs, values, want=b01.dt, description="Fast Pitch Problem")
 

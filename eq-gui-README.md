@@ -1,6 +1,6 @@
-## 🎨 Interactive Equation GUI
+## Interactive Equation GUI
 
-NEW! An interactive GUI for exploring and manipulating equations with features for variable elimination and solution tracking.
+An interactive GUI for exploring and manipulating equations with features for variable elimination and solution tracking.
 
 ```python
 from combine_equations import show_equation_gui
@@ -10,10 +10,10 @@ show_equation_gui(equations, values, want, "Problem description")
 ```
 
 **Features:**
-- 🟢 Color-coded display (green=known, red=target)
-- 🖱️ Click symbols to highlight all instances
-- ⚡ Right-click to eliminate variables
-- 📜 History view showing all operations
+- Color-coded display (green=known, red=target)
+- Click symbols to highlight all instances
+- Right-click to eliminate variables
+- History view showing all operations
 
 **Quick start:**
 ```bash

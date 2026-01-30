@@ -279,10 +279,31 @@ class EquationGUI:
     def _show_context_menu(self, event, symbol):
         """Show context menu for a symbol."""
         menu = tk.Menu(self.root, tearoff=0)
+        
+        # Add "Eliminate" option (auto-select best equation)
         menu.add_command(
-            label=f"Eliminate '{symbol}'",
+            label=f"Eliminate '{symbol}' (auto)",
             command=lambda: self._eliminate_variable(symbol)
         )
+        
+        # Add "Eliminate using..." submenu
+        _, current_eqs, _, _ = self.history[-1]
+        equations_with_symbol = [
+            (idx, eq) for idx, eq in enumerate(current_eqs)
+            if eq != True and isinstance(eq, sp.Equality) and symbol in eq.free_symbols
+        ]
+        
+        if len(equations_with_symbol) > 0:
+            eliminate_menu = tk.Menu(menu, tearoff=0)
+            for idx, eq in equations_with_symbol:
+                # Create a shortened display of the equation
+                eq_str = self._format_equation_for_menu(eq, max_length=50)
+                eliminate_menu.add_command(
+                    label=f"Eq {idx+1}: {eq_str}",
+                    command=lambda eq=eq, sym=symbol: self._eliminate_using_equation(sym, eq)
+                )
+            menu.add_cascade(label=f"Eliminate '{symbol}' using...", menu=eliminate_menu)
+        
         menu.add_separator()
         menu.add_command(label="Clear selection", command=self._clear_selection)
         
@@ -290,9 +311,16 @@ class EquationGUI:
             menu.tk_popup(event.x_root, event.y_root)
         finally:
             menu.grab_release()
+    
+    def _format_equation_for_menu(self, eq, max_length=50):
+        """Format an equation for display in menu (shortened if needed)."""
+        eq_str = f"{eq.lhs} = {eq.rhs}"
+        if len(eq_str) > max_length:
+            eq_str = eq_str[:max_length-3] + "..."
+        return eq_str
             
     def _eliminate_variable(self, symbol):
-        """Eliminate a variable from the current equations."""
+        """Eliminate a variable from the current equations (auto-select best equation)."""
         from combine_equations.eliminate_variable_subst import eliminate_variable_subst
         
         # Get current equations (from latest history)
@@ -304,9 +332,9 @@ class EquationGUI:
             
             # Create description
             if replacement is not None:
-                desc = f"Eliminated {symbol} → {replacement}"
+                desc = f"Eliminated {symbol} → {replacement} (auto)"
             else:
-                desc = f"Attempted to eliminate {symbol}"
+                desc = f"Attempted to eliminate {symbol} (auto)"
             
             # Display new equations
             self.display_equations(new_eqs, current_values, current_want, desc)
@@ -314,6 +342,49 @@ class EquationGUI:
         except Exception as e:
             desc = f"Error eliminating {symbol}: {str(e)}"
             # Show error but don't change equations
+            self.history.append((desc, current_eqs, current_values, current_want))
+            self._redraw_history()
+    
+    def _eliminate_using_equation(self, symbol, source_equation):
+        """Eliminate a variable using a specific equation."""
+        from combine_equations.eliminate_variable_subst import _safe_simplify, cleanup_equations
+        
+        # Get current equations (from latest history)
+        _, current_eqs, current_values, current_want = self.history[-1]
+        
+        try:
+            # Solve the specific equation for the symbol
+            sols = sp.solve(source_equation, symbol)
+            
+            if len(sols) == 0:
+                desc = f"Cannot solve equation for {symbol}"
+                self.history.append((desc, current_eqs, current_values, current_want))
+                self._redraw_history()
+                return
+            
+            # Use the first solution
+            replacement = _safe_simplify(sp.sympify(sols[0]))
+            
+            # Check for self-reference
+            if symbol in replacement.free_symbols:
+                desc = f"Cannot eliminate {symbol}: solution contains {symbol}"
+                self.history.append((desc, current_eqs, current_values, current_want))
+                self._redraw_history()
+                return
+            
+            # Substitute into all equations
+            new_eqs = [_safe_simplify(eq.subs({symbol: replacement})) for eq in current_eqs]
+            new_eqs = cleanup_equations(new_eqs)
+            
+            # Create description showing which equation was used
+            source_eq_str = self._format_equation_for_menu(source_equation, max_length=40)
+            desc = f"Eliminated {symbol} → {replacement} (using: {source_eq_str})"
+            
+            # Display new equations
+            self.display_equations(new_eqs, current_values, current_want, desc)
+            
+        except Exception as e:
+            desc = f"Error eliminating {symbol} using specified equation: {str(e)}"
             self.history.append((desc, current_eqs, current_values, current_want))
             self._redraw_history()
             

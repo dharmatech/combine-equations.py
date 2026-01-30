@@ -304,6 +304,18 @@ class EquationGUI:
                 )
             menu.add_cascade(label=f"Eliminate '{symbol}' using...", menu=eliminate_menu)
         
+        # Add "Isolate variable in..." submenu
+        if len(equations_with_symbol) > 0:
+            isolate_menu = tk.Menu(menu, tearoff=0)
+            for idx, eq in equations_with_symbol:
+                # Create a shortened display of the equation
+                eq_str = self._format_equation_for_menu(eq, max_length=50)
+                isolate_menu.add_command(
+                    label=f"Eq {idx+1}: {eq_str}",
+                    command=lambda eq=eq, sym=symbol, eq_idx=idx: self._isolate_variable(sym, eq, eq_idx)
+                )
+            menu.add_cascade(label=f"Isolate '{symbol}' in...", menu=isolate_menu)
+        
         menu.add_separator()
         menu.add_command(label="Clear selection", command=self._clear_selection)
         
@@ -385,6 +397,37 @@ class EquationGUI:
             
         except Exception as e:
             desc = f"Error eliminating {symbol} using specified equation: {str(e)}"
+            self.history.append((desc, current_eqs, current_values, current_want))
+            self._redraw_history()
+    
+    def _isolate_variable(self, symbol, source_equation, eq_index):
+        """Isolate a variable in a specific equation (rewrite it as symbol = ...)."""
+        from combine_equations.misc import isolate_variable
+        
+        # Get current equations (from latest history)
+        _, current_eqs, current_values, current_want = self.history[-1]
+        
+        try:
+            # Isolate the variable in the equation
+            isolated_eq = isolate_variable(source_equation, symbol)
+            
+            # Replace the original equation with the isolated form
+            new_eqs = list(current_eqs)
+            new_eqs[eq_index] = isolated_eq
+            
+            # Create description
+            source_eq_str = self._format_equation_for_menu(source_equation, max_length=40)
+            desc = f"Isolated {symbol} in Eq {eq_index+1} (was: {source_eq_str})"
+            
+            # Display new equations
+            self.display_equations(new_eqs, current_values, current_want, desc)
+            
+        except ValueError as e:
+            desc = f"Cannot isolate {symbol}: {str(e)}"
+            self.history.append((desc, current_eqs, current_values, current_want))
+            self._redraw_history()
+        except Exception as e:
+            desc = f"Error isolating {symbol}: {str(e)}"
             self.history.append((desc, current_eqs, current_values, current_want))
             self._redraw_history()
             

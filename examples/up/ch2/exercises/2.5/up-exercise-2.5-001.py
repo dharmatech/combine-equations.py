@@ -40,9 +40,7 @@ p0, p1, p2 = p.states
 p01 = p.edges[0]
 p12 = p.edges[1]
 
-eqs = []
-
-eqs += kinematics_fundamental(p, axes=['x'])
+eqs = kinematics_fundamental(p, axes=['x'])
 
 eqs += eq_flat(
     dx_p_0_1, p1.pos.x - p0.pos.x,
@@ -65,6 +63,9 @@ values[dx_p_1_2] = -40.0 * m
 
 values[p0.pos.x] = 0 * m
 # ----------------------------------------------------------------------
+
+display_equations_(eqs, values, avg_vel_02)
+
 solve_and_display_(eqs, values, want=avg_vel_02)
 # avg_vel_02 = (dx_p_0_1 + dx_p_1_2)/(dt_p_0_1 + dt_p_1_2)
 # avg_vel_02 = 0.3125*meter/second

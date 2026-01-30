@@ -1,7 +1,7 @@
-# A Fast Pitch.
+# A Fast Pitch - Interactive GUI Version
 # 
 # The fastest measured pitched baseball
-# left the pitcher’s hand at a speed of 45.0 m/s.
+# left the pitcher's hand at a speed of 45.0 m/s.
 # 
 # If the pitcher was in contact with the ball
 # over a distance of 1.50 m 
@@ -37,21 +37,5 @@ values[b0.vel.x] =  0    * m/s
 values[b1.vel.x] = 45.0  * m/s
 values[b0.t]     =  0    * s
 # ----------------------------------------------------------------------
-display_equations_(eqs, values, want=b01.a.x)
-solve_and_display_(eqs, values, want=b01.a.x)
-# a_x_b_0_1 = (b_0_v_x - b_1_v_x)*(b_0_v_x + b_1_v_x)/(2*(b_0_x - b_1_x))
-# a_x_b_0_1 = 675.0*meter/second**2
-# ----------------------------------------------------------------------
-display_equations_(eqs, values, want=b01.dt)
-solve_and_display_(eqs, values, want=b01.dt)
-# dt_b_0_1 = 2*(-b_0_x + b_1_x)/(b_0_v_x + b_1_v_x)
-# dt_b_0_1 = 0.0666666666666667*second
-# ----------------------------------------------------------------------
-
-tmp = eqs
-tmp, _ = eliminate_variable_subst(tmp, b01.v_av.x)
-display_equations_(tmp, values, want=b01.a.x)
-# ----------------------------------------------------------------------
-# Launch interactive GUI
-# Uncomment to open the GUI version:
-show_equation_gui(eqs, values, want=b01.a.x, description="Fast Pitch Problem")
+# Launch the interactive GUI
+show_equation_gui(eqs, values, want=b01.a.x, description="Fast Pitch Problem - Find acceleration")

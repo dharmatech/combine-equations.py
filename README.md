@@ -1,4 +1,8 @@
 
+Video demo of the interactive equation editor:
+
+https://youtu.be/O837G7cj5fE?si=wk4sURLNVGvgSIRq
+
 ## Install from github
 
 ```

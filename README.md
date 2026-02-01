@@ -3,6 +3,8 @@ Video demo of the interactive equation editor:
 
 https://youtu.be/O837G7cj5fE?si=wk4sURLNVGvgSIRq
 
+## `display_equations_`
+
 `display_equations_` shows
  - known values in green 🟢
  - wanted value in red 🔴
@@ -10,7 +12,7 @@ https://youtu.be/O837G7cj5fE?si=wk4sURLNVGvgSIRq
 
 <img width="500" alt="image" src="https://github.com/user-attachments/assets/91e6a073-4d32-41db-b7b3-7ed11ad511c6" />
 
-Interactive equation editor:
+## Interactive equation editor
 
 <img width="800" alt="image" src="https://github.com/user-attachments/assets/d7009494-f8b6-4fbf-a51e-50f52e30f2e2" />
 

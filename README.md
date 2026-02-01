@@ -1,4 +1,8 @@
 
+Video demo of the interactive equation editor:
+
+https://youtu.be/O837G7cj5fE?si=wk4sURLNVGvgSIRq
+
 `display_equations_` shows
  - known values in green 🟢
  - wanted value in red 🔴
@@ -9,10 +13,6 @@
 Interactive equation editor:
 
 <img width="800" alt="image" src="https://github.com/user-attachments/assets/d7009494-f8b6-4fbf-a51e-50f52e30f2e2" />
-
-Video demo of the interactive equation editor:
-
-https://youtu.be/O837G7cj5fE?si=wk4sURLNVGvgSIRq
 
 ## Install from github
 

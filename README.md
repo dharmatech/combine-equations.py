@@ -4,7 +4,7 @@
  - wanted value in red 🔴
  - unknown values in default color
 
-<img width="874" height="357" alt="image" src="https://github.com/user-attachments/assets/91e6a073-4d32-41db-b7b3-7ed11ad511c6" />
+<img width="500" alt="image" src="https://github.com/user-attachments/assets/91e6a073-4d32-41db-b7b3-7ed11ad511c6" />
 
 Interactive equation editor:
 

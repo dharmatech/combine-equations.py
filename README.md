@@ -1,4 +1,11 @@
 
+`display_equations_` shows
+ - known values in green 🟢
+ - wanted value in red 🔴
+ - unknown values in default color
+
+<img width="874" height="357" alt="image" src="https://github.com/user-attachments/assets/91e6a073-4d32-41db-b7b3-7ed11ad511c6" />
+
 Interactive equation editor:
 
 <img width="1752" height="878" alt="image" src="https://github.com/user-attachments/assets/d7009494-f8b6-4fbf-a51e-50f52e30f2e2" />

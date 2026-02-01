@@ -8,8 +8,8 @@ This example demonstrates:
 4. History/transaction tracking
 """
 
-import sys
-sys.path.insert(0, 'src')
+# import sys
+# sys.path.insert(0, 'src')
 
 from combine_equations.equation_gui import show_equation_gui
 from combine_equations.kinematics_states import make_states_model, kinematics_fundamental
@@ -61,7 +61,7 @@ print()
 print("3. VARIABLE ELIMINATION:")
 print("   → Right-click on 'v_av_x_b_0_1' (average velocity)")
 print("   → Select 'Eliminate' from the context menu")
-print("   → Watch it disappear and equations simplify!")
+print("   → Watch it disappear and equations simplify")
 print()
 print("4. HISTORY TRACKING:")
 print("   → Each operation adds a new entry to the history")
@@ -71,7 +71,7 @@ print()
 print("5. TRY THIS SEQUENCE:")
 print("   a) Right-click 'v_av_x_b_0_1' → Eliminate")
 print("   b) Right-click 'dt_b_0_1' → Eliminate")
-print("   c) See how the equations simplify step by step!")
+print("   c) See how the equations simplify step by step")
 print()
 print("=" * 70)
 print()

@@ -2,8 +2,8 @@
 Simple demo of the equation GUI with a basic kinematics problem.
 """
 
-import sys
-sys.path.insert(0, 'src')
+# import sys
+# sys.path.insert(0, 'src')
 
 from combine_equations.equation_gui import show_equation_gui
 from combine_equations.kinematics_states import make_states_model, kinematics_fundamental

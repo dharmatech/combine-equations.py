@@ -14,7 +14,15 @@ https://youtu.be/O837G7cj5fE?si=wk4sURLNVGvgSIRq
 
 ## Interactive equation solver
 
+```
+python .\examples\eq-gui\demo_gui_features.py
+```
+
 <img width="800" alt="image" src="https://github.com/user-attachments/assets/d7009494-f8b6-4fbf-a51e-50f52e30f2e2" />
+
+## Examples
+
+Examples from the textbook University Physics are here: [examples/up](examples/up).
 
 ## Install from github
 

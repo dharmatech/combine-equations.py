@@ -209,7 +209,7 @@ class EquationGUIJupyter:
         """Convert expression to LaTeX with color highlighting for symbols."""
         latex = sp.latex(expr)
         
-        # For each symbol, wrap it in colored span
+        # For each symbol, wrap it in colored span (within the LaTeX)
         for symbol in all_symbols:
             symbol_str = str(symbol)
             symbol_latex = sp.latex(symbol)
@@ -222,20 +222,29 @@ class EquationGUIJupyter:
                 color = '#00AA00'  # Green for known values
             
             # Add highlight if selected
-            bg_color = '#FFFF99' if (self.selected_symbol and symbol == self.selected_symbol) else 'transparent'
-            weight = 'bold' if (self.selected_symbol and symbol == self.selected_symbol) else 'normal'
+            is_highlighted = (self.selected_symbol and symbol == self.selected_symbol)
             
-            # Create colored span (no click handler, just visual)
-            colored_latex = (
-                f'<span style="color: {color}; background-color: {bg_color}; '
-                f'font-weight: {weight}; padding: 2px 4px; border-radius: 3px;">'
-                f'\\({symbol_latex}\\)</span>'
-            )
+            # Use \bbox for MathJax background color and \color for text color
+            if is_highlighted:
+                # MathJax bbox syntax: \bbox[background-color]{content}
+                colored_latex = f'\\bbox[yellow,2pt]{{\\color{{{self._color_to_latex(color)}}}{{{symbol_latex}}}}}'
+            else:
+                # Just color the symbol
+                colored_latex = f'\\color{{{self._color_to_latex(color)}}}{{{symbol_latex}}}'
             
-            # Replace in LaTeX - be careful with escaping
+            # Replace in LaTeX
             latex = latex.replace(symbol_latex, colored_latex)
         
         return f"\\({latex}\\)"
+    
+    def _color_to_latex(self, hex_color: str) -> str:
+        """Convert hex color to LaTeX color name."""
+        color_map = {
+            '#CC0000': 'red',
+            '#00AA00': 'green',
+            'black': 'black'
+        }
+        return color_map.get(hex_color, 'black')
     
     def _add_symbol_buttons(self, symbols):
         """Add small buttons below equation for highlighting symbols."""

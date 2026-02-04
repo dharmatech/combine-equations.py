@@ -15,6 +15,8 @@ This module provides an ipywidgets-based GUI that works in:
 - VS Code Jupyter extension
 """
 
+__version__ = "1.0.16"
+
 import ipywidgets as widgets
 from IPython.display import display, HTML, Markdown
 import sympy as sp
@@ -34,6 +36,11 @@ class EquationGUIJupyter:
         
         # Selected symbol for highlighting
         self.selected_symbol = None
+        
+        # Hidden widget for JavaScript-Python communication
+        self.click_bridge = widgets.Text(value='', description='')
+        self.click_bridge.layout.display = 'none'
+        self.click_bridge.observe(self._on_symbol_clicked, names='value')
         
         # Main output area
         self.output_area = widgets.Output()
@@ -78,10 +85,11 @@ class EquationGUIJupyter:
         # History display area
         self.output_area = widgets.Output()
         
-        # Main container
+        # Main container (include hidden click bridge)
         self.container = widgets.VBox([
             self.control_panel,
             widgets.HTML("<hr style='margin: 10px 0;'>"),
+            self.click_bridge,  # Hidden widget for JS communication
             self.output_area
         ])
         
@@ -93,13 +101,17 @@ class EquationGUIJupyter:
         
     def _create_control_panel(self):
         """Create the control panel with interaction buttons."""
-        # Title
-        title = widgets.HTML("<h3 style='margin: 5px 0;'>Equation Viewer & Manipulator</h3>")
+        # Title with version
+        title = widgets.HTML(
+            f"<h3 style='margin: 5px 0;'>Equation Viewer & Manipulator "
+            f"<span style='font-size:10px; color:#888;'>(v{__version__})</span></h3>"
+        )
         
         # Info text
         info = widgets.HTML(
             "<p style='margin: 5px 0; color: #666; font-size: 12px;'>"
-            "Click on symbols to highlight them. Use dropdowns below to manipulate equations."
+            "<b>Click on symbols</b> in equations to highlight them across all equations. "
+            "Use dropdowns below to eliminate or isolate variables."
             "</p>"
         )
         
@@ -156,6 +168,9 @@ class EquationGUIJupyter:
         with self.output_area:
             self.output_area.clear_output(wait=True)
             
+            # Inject JavaScript once at the beginning
+            self._inject_javascript()
+            
             # Render all history items
             for idx, (description, equations, values, want) in enumerate(self.history):
                 self._render_history_item(idx, description, equations, values, want)
@@ -182,17 +197,18 @@ class EquationGUIJupyter:
             self._render_equation(eq, values, want, idx, eq_idx)
     
     def _render_equation(self, eq, values, want, history_idx: int, eq_idx: int):
-        """Render a single equation with syntax highlighting."""
+        """Render a single equation with syntax highlighting and clickable symbols."""
         # Get all symbols in the equation
         all_symbols = sorted(eq.free_symbols, key=lambda s: str(s))
         
-        # Build colored LaTeX
-        lhs_colored = self._colorize_latex(eq.lhs, values, want, all_symbols)
-        rhs_colored = self._colorize_latex(eq.rhs, values, want, all_symbols)
+        # Build colored LaTeX with clickable symbols
+        lhs_colored = self._colorize_latex(eq.lhs, values, want, all_symbols, clickable=True)
+        rhs_colored = self._colorize_latex(eq.rhs, values, want, all_symbols, clickable=True)
         
-        # Create equation display
+        # Create equation display with unique ID
+        eq_id = f"eq_{history_idx}_{eq_idx}"
         eq_html = f"""
-        <div style='margin: 8px 0; padding: 10px; background: white; border-left: 3px solid #4CAF50;'>
+        <div id="{eq_id}" style='margin: 8px 0; padding: 10px; background: white; border-left: 3px solid #4CAF50;'>
             <div style='font-size: 18px; font-family: "Computer Modern", "Times New Roman", serif;'>
                 {lhs_colored} = {rhs_colored}
             </div>
@@ -200,19 +216,30 @@ class EquationGUIJupyter:
         """
         
         display(HTML(eq_html))
-        
-        # Add symbol highlight buttons for this equation (only for most recent)
-        if history_idx == len(self.history) - 1:
-            self._add_symbol_buttons(all_symbols)
     
-    def _colorize_latex(self, expr, values, want, all_symbols) -> str:
+    def _colorize_latex(self, expr, values, want, all_symbols, clickable=False) -> str:
         """Convert expression to LaTeX with color highlighting for symbols."""
+        import json
         latex = sp.latex(expr)
         
-        # For each symbol, wrap it in colored span (within the LaTeX)
-        for symbol in all_symbols:
+        # Sort symbols by length (longest first) to avoid partial replacements
+        sorted_symbols = sorted(all_symbols, key=lambda s: len(sp.latex(s)), reverse=True)
+        
+        # Build a map of symbol to its replacement
+        symbol_map = {}
+        # Build a map of LaTeX to symbol name for JavaScript
+        latex_to_symbol = {}
+        
+        # For each symbol, colorize it
+        for symbol in sorted_symbols:
             symbol_str = str(symbol)
             symbol_latex = sp.latex(symbol)
+            
+            if symbol_latex not in latex:
+                continue
+            
+            # Store mapping for JavaScript
+            latex_to_symbol[symbol_latex] = symbol_str
             
             # Determine color
             color = 'black'
@@ -226,16 +253,29 @@ class EquationGUIJupyter:
             
             # Use \bbox for MathJax background color and \color for text color
             if is_highlighted:
-                # MathJax bbox syntax: \bbox[background-color]{content}
                 colored_latex = f'\\bbox[yellow,2pt]{{\\color{{{self._color_to_latex(color)}}}{{{symbol_latex}}}}}'
             else:
-                # Just color the symbol
                 colored_latex = f'\\color{{{self._color_to_latex(color)}}}{{{symbol_latex}}}'
             
-            # Replace in LaTeX
+            symbol_map[symbol_latex] = (colored_latex, symbol_str)
+        
+        # Replace symbols in LaTeX
+        for symbol_latex, (colored_latex, symbol_str) in symbol_map.items():
             latex = latex.replace(symbol_latex, colored_latex)
         
-        return f"\\({latex}\\)"
+        # Wrap in LaTeX delimiters
+        latex_html = f"\\({latex}\\)"
+        
+        # If clickable, wrap the entire expression in a clickable span with data attribute
+        if clickable:
+            # Create a wrapper with symbol mapping for accurate click detection
+            symbol_mapping_json = json.dumps(latex_to_symbol).replace('"', '&quot;')
+            result = f"""<span class="equation-expr clickable-symbol" style="cursor: pointer; display: inline-block;" 
+                           data-symbol-map="{symbol_mapping_json}">{latex_html}</span>"""
+        else:
+            result = f"<span>{latex_html}</span>"
+        
+        return result
     
     def _color_to_latex(self, hex_color: str) -> str:
         """Convert hex color to LaTeX color name."""
@@ -246,40 +286,260 @@ class EquationGUIJupyter:
         }
         return color_map.get(hex_color, 'black')
     
-    def _add_symbol_buttons(self, symbols):
-        """Add small buttons below equation for highlighting symbols."""
-        # Skip if no new symbols
-        if not hasattr(self, '_shown_symbol_buttons'):
-            self._shown_symbol_buttons = set()
+    def _make_clickable_wrapper(self, latex_html: str, all_symbols) -> str:
+        """Wrap LaTeX HTML with clickable functionality."""
+        # Extract all symbol strings for the data attribute
+        symbol_strs = [str(s) for s in all_symbols]
+        symbols_json = ','.join(symbol_strs)
         
-        new_symbols = [s for s in symbols if str(s) not in self._shown_symbol_buttons]
-        if not new_symbols:
+        # Wrap in a span with click handler
+        wrapper = f"""
+        <span class="clickable-equation" data-symbols="{symbols_json}" 
+              style="cursor: pointer; user-select: none; display: inline-block; 
+                     padding: 2px; border-radius: 3px; transition: background-color 0.2s;" 
+              onmouseover="this.style.backgroundColor='#f0f0f0'" 
+              onmouseout="this.style.backgroundColor='transparent'"
+              onclick="handleEquationClick(event, this)"
+              title="Click to highlight symbols in this expression">
+            {latex_html}
+        </span>
+        """
+        return wrapper
+    
+    def _inject_javascript(self):
+        """Inject JavaScript for handling symbol clicks using event delegation."""
+        
+        js_code = """
+        <script>
+        // Only add listener once - check if already added
+        if (!window._equationGuiListenerAdded) {
+            window._equationGuiListenerAdded = true;
+            
+            // Use event delegation - attach listener to document
+            document.addEventListener('click', function(event) {
+                // Find the clicked element or its parent with the clickable-symbol class
+                var element = event.target;
+                var wrapper = null;
+                
+                // Walk up to find the span with data-symbol-map (increased depth for MathJax fractions)
+                for (var i = 0; i < 20 && element; i++) {
+                    if (element.classList && element.classList.contains('clickable-symbol')) {
+                        wrapper = element;
+                        break;
+                    }
+                    element = element.parentElement;
+                }
+                
+                if (!wrapper) {
+                    // Debug: check if this was in an equation area
+                    var checkEl = event.target;
+                    for (var i = 0; i < 20 && checkEl; i++) {
+                        if (checkEl.classList && checkEl.classList.contains('equation-expr')) {
+                            console.log('Found equation-expr but not clickable-symbol at level', i);
+                            console.log('Element:', checkEl);
+                            break;
+                        }
+                        checkEl = checkEl.parentElement;
+                    }
+                    return; // Not a symbol click
+                }
+            
+            // Get symbol mapping from element's data attribute
+            var symbolMapStr = wrapper.getAttribute('data-symbol-map');
+            if (!symbolMapStr) {
+                console.error('No symbol mapping found');
+                return;
+            }
+            
+            var symbolMap = JSON.parse(symbolMapStr);
+            
+            // Try to get text from the clicked target first (more specific)
+            // For fractions, we want to identify if we're in numerator or denominator
+            var target = event.target;
+            var clickedText = '';
+            var foundMatch = false;
+            
+            // Walk up from target, trying to find the smallest element with matching symbols
+            var testElement = target;
+            for (var j = 0; j < 15 && testElement && testElement !== wrapper; j++) {
+                var text = testElement.textContent || testElement.innerText;
+                if (text && text.trim().length >= 2) {
+                    var testClean = text.trim().replace(/[\\s\\u2212+*/=()\\[\\]\\-]/g, '');
+                    // Check if this text contains any symbol
+                    for (var key in symbolMap) {
+                        var cleanPattern = key.replace(/[_{}\\s]/g, '');
+                        if (testClean.includes(cleanPattern)) {
+                            clickedText = text.trim();
+                            foundMatch = true;
+                            break;
+                        }
+                    }
+                    if (foundMatch) break;
+                }
+                testElement = testElement.parentElement;
+            }
+            
+            // Fallback to wrapper if no match found
+            if (!clickedText || !clickedText.trim()) {
+                clickedText = wrapper.textContent || wrapper.innerText;
+            }
+            
+            if (!clickedText || !clickedText.trim()) {
+                console.log('No text found in clicked element');
+                return;
+            }
+            
+            clickedText = clickedText.trim();
+            console.log('Clicked text:', clickedText);
+            
+            // Find all matching symbols
+            var cleanText = clickedText.replace(/[\\s\\u2212+*/=()\\[\\]\\-]/g, '');
+            var matches = [];
+            
+            for (var key in symbolMap) {
+                var cleanPattern = key.replace(/[_{}\\s]/g, '');
+                if (cleanText.includes(cleanPattern)) {
+                    matches.push({
+                        latex: key,
+                        symbol: symbolMap[key],
+                        pattern: cleanPattern,
+                        index: cleanText.indexOf(cleanPattern)
+                    });
+                }
+            }
+            
+            var symbolStr = null;
+            
+            if (matches.length === 0) {
+                // No matches - use first symbol as fallback
+                var keys = Object.keys(symbolMap);
+                symbolStr = symbolMap[keys[0]];
+                console.log('No match found, using fallback:', symbolStr);
+            } else if (matches.length === 1) {
+                // Single match - use it
+                symbolStr = matches[0].symbol;
+            } else {
+                // Multiple matches - use X position (and Y for fractions)
+                matches.sort(function(a, b) { return a.index - b.index; });
+                
+                var rect = wrapper.getBoundingClientRect();
+                var clickX = event.clientX - rect.left;
+                var clickY = event.clientY - rect.top;
+                var clickRatioX = clickX / rect.width;
+                var clickRatioY = clickY / rect.height;
+                
+                var textLen = cleanText.length;
+                var filtered = matches;
+                
+                // Get the LaTeX source from the wrapper's innerHTML to check for fractions
+                var wrapperHTML = wrapper.innerHTML || '';
+                var hasFraction = wrapperHTML.indexOf('frac') !== -1;
+                
+                if (hasFraction) {
+                    // Use Y position to filter to numerator or denominator group
+                    // If Y < 0.5, keep symbols in first half of text (numerator)
+                    // If Y >= 0.5, keep symbols in second half of text (denominator)
+                    var midIndex = textLen / 2;
+                    filtered = matches.filter(function(m) {
+                        var isInFirstHalf = (m.index + m.pattern.length / 2) < midIndex;
+                        return clickRatioY < 0.5 ? isInFirstHalf : !isInFirstHalf;
+                    });
+                    
+                    // If filter removed everything, use all matches
+                    if (filtered.length === 0) {
+                        filtered = matches;
+                    }
+                    
+                    console.log('Y filter (fraction): clickY=' + clickRatioY.toFixed(2) + ', filtered to:', filtered.map(function(m) { return m.symbol; }));
+                } else {
+                    console.log('No fraction - using X position only');
+                }
+                
+                // Step 2: Within filtered group, use X position
+                var bestMatch = filtered[0];
+                
+                if (filtered.length > 1) {
+                    // Find the visual positions of filtered symbols relative to each other
+                    var minIdx = filtered[0].index;
+                    var maxIdx = filtered[filtered.length - 1].index + filtered[filtered.length - 1].pattern.length;
+                    var span = maxIdx - minIdx;
+                    
+                    var bestDist = 999;
+                    for (var mi = 0; mi < filtered.length; mi++) {
+                        var m = filtered[mi];
+                        // Position within the filtered group (0 to 1)
+                        var relPos = span > 0 ? (m.index - minIdx + m.pattern.length / 2) / span : 0.5;
+                        var dist = Math.abs(relPos - clickRatioX);
+                        if (dist < bestDist) {
+                            bestDist = dist;
+                            bestMatch = m;
+                        }
+                    }
+                }
+                
+                symbolStr = bestMatch.symbol;
+                console.log('Final pick: clickX=' + clickRatioX.toFixed(2) + ', picked:', symbolStr);
+                console.log('All matches:', matches.map(function(m) { return m.symbol + '@' + m.index; }));
+            }
+            
+            if (!symbolStr) {
+                console.log('No symbol found');
+                return;
+            }
+            
+            var newValue = symbolStr + '_' + Date.now();
+            
+            // Find the hidden text widget by searching up the DOM tree
+            var searchRoot = wrapper;
+            for (var k = 0; k < 10; k++) {
+                searchRoot = searchRoot.parentElement;
+                if (!searchRoot) break;
+                
+                // Look for the hidden input in this container
+                var inputs = searchRoot.querySelectorAll('input[type="text"]');
+                for (var m = 0; m < inputs.length; m++) {
+                    var input = inputs[m];
+                    // Check if this is a hidden widget
+                    var parent = input.parentElement;
+                    if (parent && parent.style && parent.style.display === 'none') {
+                        // Found it! Update the value
+                        input.value = newValue;
+                        
+                        // Trigger events to notify ipywidgets
+                        var inputEvent = new Event('input', { bubbles: true });
+                        var changeEvent = new Event('change', { bubbles: true });
+                        input.dispatchEvent(inputEvent);
+                        input.dispatchEvent(changeEvent);
+                        
+                        console.log('Symbol click registered:', symbolStr);
+                        return; // Success!
+                    }
+                }
+            }
+            console.error('Could not find hidden widget');
+        });
+        }
+        </script>
+        """
+        display(HTML(js_code))
+    
+    def _on_symbol_clicked(self, change):
+        """Handle symbol click from JavaScript."""
+        if not change['new']:
             return
         
-        # Create tiny buttons for each new symbol
-        buttons = []
-        for symbol in new_symbols:
-            btn = widgets.Button(
-                description=str(symbol),
-                layout=widgets.Layout(width='auto', height='25px'),
-                style={'button_color': '#e0e0e0', 'font_size': '10px'}
-            )
-            btn.on_click(lambda b, sym=symbol: self._highlight_symbol(sym))
-            buttons.append(btn)
-            self._shown_symbol_buttons.add(str(symbol))
+        # Parse the symbol name (remove timestamp)
+        parts = change['new'].rsplit('_', 1)
+        symbol_str = parts[0] if len(parts) > 1 else change['new']
         
-        if buttons:
-            button_box = widgets.HBox(
-                [widgets.Label('Highlight: ', layout=widgets.Layout(width='70px'))] + buttons,
-                layout=widgets.Layout(margin='0 0 5px 10px')
-            )
-            display(button_box)
-    
-    def _highlight_symbol(self, symbol):
-        """Highlight a symbol across all equations."""
-        self.selected_symbol = symbol
-        self._shown_symbol_buttons = set()  # Reset to show buttons again
-        self._update_display()
+        # Find the symbol object
+        symbol = self._find_symbol(symbol_str)
+        if symbol:
+            self.selected_symbol = symbol
+            self._update_display()
+        
+        # Reset the bridge
+        self.click_bridge.value = ''
     
     def _update_control_panel(self):
         """Update the control panel dropdowns based on current equations."""

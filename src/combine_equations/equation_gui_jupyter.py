@@ -15,7 +15,7 @@ This module provides an ipywidgets-based GUI that works in:
 - VS Code Jupyter extension
 """
 
-__version__ = "1.1.1"
+__version__ = "1.2.0"
 
 import ipywidgets as widgets
 from IPython.display import display, HTML, Markdown
@@ -677,10 +677,13 @@ class EquationGUIJupyter:
             };
             
             // Add menu items
-            addMenuItem(menu, "Eliminate '" + symbol + "' (auto)", 'eliminate_auto:' + symbol);
-            addMenuItem(menu, "Eliminate '" + symbol + "' using...", 'eliminate_using:' + symbol);
+            addMenuItem(menu, "Eliminate '" + symbol + "' (auto)", 'eliminate_auto:' + symbol, false);
+            addMenuItemWithSubmenu(menu, "Eliminate '" + symbol + "' using...", symbol, x, y, 'eliminate');
             menu.appendChild(createSeparator());
-            addMenuItem(menu, "Clear selection", 'clear_selection');
+            addMenuItem(menu, "Isolate '" + symbol + "' (auto)", 'isolate_auto:' + symbol, false);
+            addMenuItemWithSubmenu(menu, "Isolate '" + symbol + "' in...", symbol, x, y, 'isolate');
+            menu.appendChild(createSeparator());
+            addMenuItem(menu, "Clear selection", 'clear_selection', false);
             
             // Prevent menu from going off-screen
             document.body.appendChild(menu);
@@ -696,17 +699,171 @@ class EquationGUIJupyter:
             window._activeContextMenu = menu;
         }
         
-        function addMenuItem(menu, label, command) {
+        function addMenuItem(menu, label, command, hasSubmenu) {
             var item = document.createElement('div');
             item.className = 'equation-context-menu-item';
-            item.textContent = label;
+            
+            if (hasSubmenu) {
+                // Add arrow indicator for submenu
+                item.innerHTML = label + ' <span style="float: right; margin-left: 20px;">▶</span>';
+            } else {
+                item.textContent = label;
+            }
+            
+            if (!hasSubmenu) {
+                item.onclick = function(e) {
+                    e.stopPropagation();
+                    sendContextMenuCommand(command);
+                    menu.remove();
+                    window._activeContextMenu = null;
+                };
+            }
+            
+            menu.appendChild(item);
+            return item;
+        }
+        
+        function addMenuItemWithSubmenu(parentMenu, label, symbol, parentX, parentY, action) {
+            var item = addMenuItem(parentMenu, label, '', true);
+            var submenu = null;
+            
+            // Show submenu on click
             item.onclick = function(e) {
                 e.stopPropagation();
-                sendContextMenuCommand(command);
-                menu.remove();
-                window._activeContextMenu = null;
+                
+                // Close existing submenu if any
+                if (submenu) {
+                    submenu.remove();
+                    submenu = null;
+                    return;
+                }
+                
+                // Get equations with this symbol from Python side
+                // We'll request them via a special command
+                getEquationsWithSymbol(symbol, function(equations) {
+                    if (equations.length === 0) {
+                        return;
+                    }
+                    
+                    // Create submenu
+                    submenu = document.createElement('div');
+                    submenu.className = 'equation-context-menu';
+                    
+                    // Position submenu to the right of parent item
+                    var itemRect = item.getBoundingClientRect();
+                    var parentRect = parentMenu.getBoundingClientRect();
+                    submenu.style.left = (parentRect.right + 2) + 'px';
+                    submenu.style.top = itemRect.top + 'px';
+                    
+                    // Add equation options
+                    for (var i = 0; i < equations.length; i++) {
+                        var eq = equations[i];
+                        var command = action + '_using:' + symbol + ':' + eq.index;
+                        // Create submenu item with custom handler that closes both menus
+                        var submenuItem = document.createElement('div');
+                        submenuItem.className = 'equation-context-menu-item';
+                        submenuItem.textContent = 'Eq ' + (eq.index + 1) + ': ' + eq.display;
+                        (function(cmd) {
+                            submenuItem.onclick = function(e) {
+                                e.stopPropagation();
+                                sendContextMenuCommand(cmd);
+                                // Close submenu
+                                if (submenu) {
+                                    submenu.remove();
+                                    submenu = null;
+                                }
+                                // Close parent menu
+                                if (parentMenu) {
+                                    parentMenu.remove();
+                                }
+                                window._activeContextMenu = null;
+                            };
+                        })(command);
+                        submenu.appendChild(submenuItem);
+                    }
+                    
+                    document.body.appendChild(submenu);
+                    
+                    // Adjust if off-screen
+                    var submenuRect = submenu.getBoundingClientRect();
+                    if (submenuRect.right > window.innerWidth) {
+                        submenu.style.left = (parentRect.left - submenuRect.width - 2) + 'px';
+                    }
+                    if (submenuRect.bottom > window.innerHeight) {
+                        submenu.style.top = (window.innerHeight - submenuRect.height - 10) + 'px';
+                    }
+                    
+                    // Close submenu when clicking outside
+                    setTimeout(function() {
+                        document.addEventListener('click', function closeSubmenu(e) {
+                            if (submenu && !submenu.contains(e.target)) {
+                                submenu.remove();
+                                submenu = null;
+                                document.removeEventListener('click', closeSubmenu);
+                            }
+                        });
+                    }, 100);
+                });
             };
-            menu.appendChild(item);
+        }
+        
+        function getEquationsWithSymbol(symbol, callback) {
+            // For now, we'll extract equations directly from the DOM
+            // Look for equation displays in the current view
+            var equations = [];
+            
+            // Find all clickable symbols with this symbol's data
+            var clickableSymbols = document.querySelectorAll('.clickable-symbol');
+            var equationIndices = new Set();
+            
+            for (var i = 0; i < clickableSymbols.length; i++) {
+                var elem = clickableSymbols[i];
+                var symbolMapStr = elem.getAttribute('data-symbol-map');
+                if (symbolMapStr) {
+                    try {
+                        var symbolMap = JSON.parse(symbolMapStr);
+                        // Check if this element contains our symbol
+                        for (var key in symbolMap) {
+                            if (symbolMap[key] === symbol) {
+                                // Extract equation index from parent structure
+                                var eqDiv = elem.closest('[id^="eq_"]');
+                                if (eqDiv) {
+                                    var idParts = eqDiv.id.split('_');
+                                    if (idParts.length >= 3) {
+                                        var histIdx = parseInt(idParts[1]);
+                                        var eqIdx = parseInt(idParts[2]);
+                                        // Only include equations from the latest history item
+                                        var allEqDivs = document.querySelectorAll('[id^="eq_"]');
+                                        var maxHistIdx = 0;
+                                        for (var j = 0; j < allEqDivs.length; j++) {
+                                            var parts = allEqDivs[j].id.split('_');
+                                            if (parts.length >= 2) {
+                                                maxHistIdx = Math.max(maxHistIdx, parseInt(parts[1]));
+                                            }
+                                        }
+                                        if (histIdx === maxHistIdx && !equationIndices.has(eqIdx)) {
+                                            equationIndices.add(eqIdx);
+                                            // Get equation text for display
+                                            var eqText = eqDiv.textContent || '';
+                                            eqText = eqText.trim().substring(0, 40);
+                                            if (eqText.length >= 40) eqText += '...';
+                                            equations.push({
+                                                index: eqIdx,
+                                                display: eqText
+                                            });
+                                        }
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    } catch(e) {}
+                }
+            }
+            
+            // Sort by index
+            equations.sort(function(a, b) { return a.index - b.index; });
+            callback(equations);
         }
         
         function createSeparator() {
@@ -803,11 +960,47 @@ class EquationGUIJupyter:
             if symbol:
                 self._eliminate_variable(symbol)
         elif command.startswith('eliminate_using:'):
+            # Parse format: eliminate_using:symbol:eq_idx
+            parts = command.split(':', 2)
+            if len(parts) >= 2:
+                symbol_str = parts[1]
+                symbol = self._find_symbol(symbol_str)
+                if symbol:
+                    if len(parts) == 3:
+                        # Specific equation index provided
+                        eq_idx = int(parts[2])
+                        _, current_eqs, _, _ = self.history[-1]
+                        if eq_idx < len(current_eqs):
+                            self._eliminate_using_equation(symbol, current_eqs[eq_idx])
+                    else:
+                        # Fallback: set dropdown (shouldn't happen with new menu)
+                        self.eliminate_using_var_dropdown.value = symbol_str
+        elif command.startswith('isolate_auto:'):
             symbol_str = command.split(':', 1)[1]
             symbol = self._find_symbol(symbol_str)
             if symbol:
-                # Set the dropdown to trigger the two-stage process
-                self.eliminate_using_var_dropdown.value = symbol_str
+                # Auto-select first equation with the symbol
+                _, current_eqs, current_values, current_want = self.history[-1]
+                equations_with_symbol = [
+                    (idx, eq) for idx, eq in enumerate(current_eqs)
+                    if eq != True and isinstance(eq, sp.Equality) and symbol in eq.free_symbols
+                ]
+                if len(equations_with_symbol) > 0:
+                    idx, eq = equations_with_symbol[0]
+                    self._isolate_variable(symbol, eq, idx)
+        elif command.startswith('isolate_using:'):
+            # Parse format: isolate_using:symbol:eq_idx
+            parts = command.split(':', 2)
+            if len(parts) >= 2:
+                symbol_str = parts[1]
+                symbol = self._find_symbol(symbol_str)
+                if symbol:
+                    if len(parts) == 3:
+                        # Specific equation index provided
+                        eq_idx = int(parts[2])
+                        _, current_eqs, _, _ = self.history[-1]
+                        if eq_idx < len(current_eqs):
+                            self._isolate_variable(symbol, current_eqs[eq_idx], eq_idx)
         
         # Reset the bridge
         self.context_menu_bridge.value = ''
@@ -1016,6 +1209,37 @@ class EquationGUIJupyter:
             
         except Exception as e:
             desc = f"Error eliminating {symbol}: {str(e)}"
+            self.history.append((desc, current_eqs, current_values, current_want))
+            self._update_display()
+    
+    def _isolate_variable(self, symbol, source_equation, eq_index):
+        """Isolate a variable in a specific equation (rewrite it as symbol = ...)."""
+        from combine_equations.misc import isolate_variable
+        
+        # Get current equations (from latest history)
+        _, current_eqs, current_values, current_want = self.history[-1]
+        
+        try:
+            # Isolate the variable in the equation
+            isolated_eq = isolate_variable(source_equation, symbol)
+            
+            # Replace the original equation with the isolated form
+            new_eqs = list(current_eqs)
+            new_eqs[eq_index] = isolated_eq
+            
+            # Create description
+            source_eq_str = self._format_equation_short(source_equation, max_length=30)
+            desc = f"Isolated {symbol} in Eq {eq_index+1} (was: {source_eq_str})"
+            
+            # Display new equations
+            self.display_equations(new_eqs, current_values, current_want, desc)
+            
+        except ValueError as e:
+            desc = f"Cannot isolate {symbol}: {str(e)}"
+            self.history.append((desc, current_eqs, current_values, current_want))
+            self._update_display()
+        except Exception as e:
+            desc = f"Error isolating {symbol}: {str(e)}"
             self.history.append((desc, current_eqs, current_values, current_want))
             self._update_display()
     

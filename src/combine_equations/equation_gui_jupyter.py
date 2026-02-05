@@ -15,7 +15,7 @@ This module provides an ipywidgets-based GUI that works in:
 - VS Code Jupyter extension
 """
 
-__version__ = "1.0.16"
+__version__ = "1.1.1"
 
 import ipywidgets as widgets
 from IPython.display import display, HTML, Markdown
@@ -41,6 +41,11 @@ class EquationGUIJupyter:
         self.click_bridge = widgets.Text(value='', description='')
         self.click_bridge.layout.display = 'none'
         self.click_bridge.observe(self._on_symbol_clicked, names='value')
+        
+        # Hidden widget for context menu commands
+        self.context_menu_bridge = widgets.Text(value='', description='')
+        self.context_menu_bridge.layout.display = 'none'
+        self.context_menu_bridge.observe(self._on_context_menu_command, names='value')
         
         # Main output area
         self.output_area = widgets.Output()
@@ -85,11 +90,12 @@ class EquationGUIJupyter:
         # History display area
         self.output_area = widgets.Output()
         
-        # Main container (include hidden click bridge)
+        # Main container (include hidden bridges)
         self.container = widgets.VBox([
             self.control_panel,
             widgets.HTML("<hr style='margin: 10px 0;'>"),
-            self.click_bridge,  # Hidden widget for JS communication
+            self.click_bridge,  # Hidden widget for click JS communication
+            self.context_menu_bridge,  # Hidden widget for context menu JS communication
             self.output_area
         ])
         
@@ -110,8 +116,9 @@ class EquationGUIJupyter:
         # Info text
         info = widgets.HTML(
             "<p style='margin: 5px 0; color: #666; font-size: 12px;'>"
-            "<b>Click on symbols</b> in equations to highlight them across all equations. "
-            "Use dropdowns below to eliminate or isolate variables."
+            "<b>Left-click symbols</b> to highlight them. "
+            "<b>Right-click symbols</b> for elimination/isolation options. "
+            "Or use dropdowns below."
             "</p>"
         )
         
@@ -307,7 +314,10 @@ class EquationGUIJupyter:
         return wrapper
     
     def _inject_javascript(self):
-        """Inject JavaScript for handling symbol clicks using event delegation."""
+        """Inject JavaScript for handling symbol clicks and context menu using event delegation."""
+        
+        # First inject CSS for context menu
+        self._inject_context_menu_css()
         
         js_code = """
         <script>
@@ -315,8 +325,16 @@ class EquationGUIJupyter:
         if (!window._equationGuiListenerAdded) {
             window._equationGuiListenerAdded = true;
             
+            // Context menu state
+            window._activeContextMenu = null;
+            
             // Use event delegation - attach listener to document
             document.addEventListener('click', function(event) {
+                // Close context menu on any click
+                if (window._activeContextMenu) {
+                    window._activeContextMenu.remove();
+                    window._activeContextMenu = null;
+                }
                 // Find the clicked element or its parent with the clickable-symbol class
                 var element = event.target;
                 var wrapper = null;
@@ -518,6 +536,231 @@ class EquationGUIJupyter:
             }
             console.error('Could not find hidden widget');
         });
+        
+        // Right-click handler for context menu (use capture phase for better control)
+        document.addEventListener('contextmenu', function(event) {
+            // Find the clicked element or its parent with the clickable-symbol class
+            var element = event.target;
+            var wrapper = null;
+            
+            // Walk up to find the span with data-symbol-map
+            for (var i = 0; i < 20 && element; i++) {
+                if (element.classList && element.classList.contains('clickable-symbol')) {
+                    wrapper = element;
+                    break;
+                }
+                element = element.parentElement;
+            }
+            
+            if (!wrapper) {
+                return true; // Not a symbol - allow default context menu
+            }
+            
+            // Prevent default browser context menu
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+            
+            // Get symbol from click (reuse existing logic)
+            var symbolMapStr = wrapper.getAttribute('data-symbol-map');
+            if (!symbolMapStr) {
+                return;
+            }
+            
+            var symbolMap = JSON.parse(symbolMapStr);
+            var target = event.target;
+            var clickedText = '';
+            var foundMatch = false;
+            
+            // Find clicked text
+            var testElement = target;
+            for (var j = 0; j < 15 && testElement && testElement !== wrapper; j++) {
+                var text = testElement.textContent || testElement.innerText;
+                if (text && text.trim().length >= 2) {
+                    var testClean = text.trim().replace(/[\\s\\u2212+*/=()\\[\\]\\-]/g, '');
+                    for (var key in symbolMap) {
+                        var cleanPattern = key.replace(/[_{}\\s]/g, '');
+                        if (testClean.includes(cleanPattern)) {
+                            clickedText = text.trim();
+                            foundMatch = true;
+                            break;
+                        }
+                    }
+                    if (foundMatch) break;
+                }
+                testElement = testElement.parentElement;
+            }
+            
+            if (!clickedText || !clickedText.trim()) {
+                clickedText = wrapper.textContent || wrapper.innerText;
+            }
+            
+            if (!clickedText || !clickedText.trim()) {
+                return;
+            }
+            
+            clickedText = clickedText.trim();
+            
+            // Find matching symbols
+            var cleanText = clickedText.replace(/[\\s\\u2212+*/=()\\[\\]\\-]/g, '');
+            var matches = [];
+            
+            for (var key in symbolMap) {
+                var cleanPattern = key.replace(/[_{}\\s]/g, '');
+                if (cleanText.includes(cleanPattern)) {
+                    matches.push({
+                        latex: key,
+                        symbol: symbolMap[key],
+                        pattern: cleanPattern,
+                        index: cleanText.indexOf(cleanPattern)
+                    });
+                }
+            }
+            
+            var symbolStr = null;
+            
+            if (matches.length === 0) {
+                var keys = Object.keys(symbolMap);
+                symbolStr = symbolMap[keys[0]];
+            } else if (matches.length === 1) {
+                symbolStr = matches[0].symbol;
+            } else {
+                // Use position-based selection (similar to click handler)
+                matches.sort(function(a, b) { return a.index - b.index; });
+                var rect = wrapper.getBoundingClientRect();
+                var clickX = event.clientX - rect.left;
+                var clickRatioX = clickX / rect.width;
+                symbolStr = matches[0].symbol;
+                
+                var bestDist = 999;
+                for (var mi = 0; mi < matches.length; mi++) {
+                    var m = matches[mi];
+                    var relPos = m.index / cleanText.length;
+                    var dist = Math.abs(relPos - clickRatioX);
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        symbolStr = m.symbol;
+                    }
+                }
+            }
+            
+            if (!symbolStr) {
+                event.preventDefault();
+                return false;
+            }
+            
+            // Show context menu
+            showContextMenu(event.clientX, event.clientY, symbolStr);
+            
+            // Return false to prevent any other handlers
+            return false;
+        }, true); // Use capture phase for better event control
+        
+        // Function to show context menu
+        function showContextMenu(x, y, symbol) {
+            // Close any existing menu
+            if (window._activeContextMenu) {
+                window._activeContextMenu.remove();
+            }
+            
+            // Create menu container
+            var menu = document.createElement('div');
+            menu.className = 'equation-context-menu';
+            menu.style.left = x + 'px';
+            menu.style.top = y + 'px';
+            
+            // Prevent context menu on the menu itself
+            menu.oncontextmenu = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            };
+            
+            // Add menu items
+            addMenuItem(menu, "Eliminate '" + symbol + "' (auto)", 'eliminate_auto:' + symbol);
+            addMenuItem(menu, "Eliminate '" + symbol + "' using...", 'eliminate_using:' + symbol);
+            menu.appendChild(createSeparator());
+            addMenuItem(menu, "Clear selection", 'clear_selection');
+            
+            // Prevent menu from going off-screen
+            document.body.appendChild(menu);
+            
+            var menuRect = menu.getBoundingClientRect();
+            if (menuRect.right > window.innerWidth) {
+                menu.style.left = (x - menuRect.width) + 'px';
+            }
+            if (menuRect.bottom > window.innerHeight) {
+                menu.style.top = (y - menuRect.height) + 'px';
+            }
+            
+            window._activeContextMenu = menu;
+        }
+        
+        function addMenuItem(menu, label, command) {
+            var item = document.createElement('div');
+            item.className = 'equation-context-menu-item';
+            item.textContent = label;
+            item.onclick = function(e) {
+                e.stopPropagation();
+                sendContextMenuCommand(command);
+                menu.remove();
+                window._activeContextMenu = null;
+            };
+            menu.appendChild(item);
+        }
+        
+        function createSeparator() {
+            var sep = document.createElement('div');
+            sep.className = 'equation-context-menu-separator';
+            return sep;
+        }
+        
+        function sendContextMenuCommand(command) {
+            // Find the hidden context menu widget
+            // Look for hidden text inputs and try to find the second one (context menu bridge)
+            var inputs = document.querySelectorAll('input[type="text"]');
+            var hiddenInputs = [];
+            
+            for (var i = 0; i < inputs.length; i++) {
+                var input = inputs[i];
+                var parent = input.parentElement;
+                if (parent && parent.style && parent.style.display === 'none') {
+                    hiddenInputs.push(input);
+                }
+            }
+            
+            // We need at least 2 hidden inputs (click_bridge and context_menu_bridge)
+            // The context_menu_bridge should be the second one (or we can try both)
+            if (hiddenInputs.length >= 2) {
+                // Try the second hidden input (context menu bridge)
+                var input = hiddenInputs[1];
+                var testValue = command + '_' + Date.now();
+                input.value = testValue;
+                
+                var inputEvent = new Event('input', { bubbles: true });
+                var changeEvent = new Event('change', { bubbles: true });
+                input.dispatchEvent(inputEvent);
+                input.dispatchEvent(changeEvent);
+                
+                console.log('Context menu command sent:', command);
+                return;
+            } else if (hiddenInputs.length === 1) {
+                // Fallback: only one hidden input, try it anyway
+                var input = hiddenInputs[0];
+                var testValue = command + '_' + Date.now();
+                input.value = testValue;
+                
+                var inputEvent = new Event('input', { bubbles: true });
+                var changeEvent = new Event('change', { bubbles: true });
+                input.dispatchEvent(inputEvent);
+                input.dispatchEvent(changeEvent);
+                
+                console.log('Context menu command sent to single bridge:', command);
+                return;
+            }
+            
+            console.error('Could not find context menu bridge widget. Found', hiddenInputs.length, 'hidden inputs');
+        }
         }
         </script>
         """
@@ -540,6 +783,34 @@ class EquationGUIJupyter:
         
         # Reset the bridge
         self.click_bridge.value = ''
+    
+    def _on_context_menu_command(self, change):
+        """Handle context menu command from JavaScript."""
+        if not change['new']:
+            return
+        
+        # Parse the command (remove timestamp)
+        parts = change['new'].rsplit('_', 1)
+        command = parts[0] if len(parts) > 1 else change['new']
+        
+        # Handle different commands
+        if command == 'clear_selection':
+            self.selected_symbol = None
+            self._update_display()
+        elif command.startswith('eliminate_auto:'):
+            symbol_str = command.split(':', 1)[1]
+            symbol = self._find_symbol(symbol_str)
+            if symbol:
+                self._eliminate_variable(symbol)
+        elif command.startswith('eliminate_using:'):
+            symbol_str = command.split(':', 1)[1]
+            symbol = self._find_symbol(symbol_str)
+            if symbol:
+                # Set the dropdown to trigger the two-stage process
+                self.eliminate_using_var_dropdown.value = symbol_str
+        
+        # Reset the bridge
+        self.context_menu_bridge.value = ''
     
     def _update_control_panel(self):
         """Update the control panel dropdowns based on current equations."""
@@ -747,6 +1018,47 @@ class EquationGUIJupyter:
             desc = f"Error eliminating {symbol}: {str(e)}"
             self.history.append((desc, current_eqs, current_values, current_want))
             self._update_display()
+    
+    def _inject_context_menu_css(self):
+        """Inject CSS styles for the context menu."""
+        css_code = """
+        <style>
+        .equation-context-menu {
+            position: fixed;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
+            z-index: 10000;
+            min-width: 200px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-size: 13px;
+            padding: 4px 0;
+        }
+        
+        .equation-context-menu-item {
+            padding: 6px 16px;
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.1s;
+        }
+        
+        .equation-context-menu-item:hover {
+            background-color: #f0f0f0;
+        }
+        
+        .equation-context-menu-item:active {
+            background-color: #e0e0e0;
+        }
+        
+        .equation-context-menu-separator {
+            height: 1px;
+            background-color: #e0e0e0;
+            margin: 4px 0;
+        }
+        </style>
+        """
+        display(HTML(css_code))
 
 
 def show_equation_gui_jupyter(equations, values=None, want=None):

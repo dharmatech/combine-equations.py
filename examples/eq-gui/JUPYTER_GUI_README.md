@@ -9,8 +9,9 @@ Interactive equation viewer and manipulator for Jupyter notebooks (including Jup
   - Green = known values
   - Red = target variable
   - Black = unknowns
-- **💡 Interactive highlighting** - Click symbol buttons to highlight across all equations
-- **⚡ Variable elimination** - Dropdown menus to eliminate or isolate variables
+- **💡 Interactive highlighting** - Left-click symbols to highlight across all equations
+- **🖱️ Right-click context menu** - Right-click symbols for quick eliminate/isolate operations
+- **⚡ Variable elimination** - Dropdown menus also available for operations
 - **📊 History tracking** - See all transformations step-by-step
 
 ## Works In
@@ -59,18 +60,19 @@ gui = show_equation_gui_jupyter(eqs, values=values, want=want)
 ## Usage
 
 1. **View equations** - Equations display with color-coded symbols
-2. **Highlight symbols** - Click small buttons below equations to highlight a symbol
-3. **Eliminate variables** - Use "Eliminate" dropdown for automatic elimination
-4. **Manual control** - Use "Eliminate using..." for step-by-step control
-5. **Track progress** - History shows all operations performed
+2. **Highlight symbols** - Left-click on symbols to highlight them across all equations
+3. **Context menu** - Right-click on symbols for quick eliminate/isolate operations
+4. **Eliminate variables** - Use "Eliminate" dropdown for automatic elimination
+5. **Manual control** - Use "Eliminate using..." for step-by-step control
+6. **Track progress** - History shows all operations performed
 
 ## Comparison with Desktop GUI
 
 | Feature | Jupyter GUI | Tkinter GUI |
 |---------|------------|-------------|
 | LaTeX rendering | ✅ Excellent (MathJax) | ❌ Plain text |
-| Click to highlight | ✅ Button-based | ✅ Direct click |
-| Right-click menus | ❌ Dropdown-based | ✅ Context menus |
+| Click to highlight | ✅ Direct click | ✅ Direct click |
+| Right-click menus | ✅ Context menus | ✅ Context menus |
 | Works in browser | ✅ Yes | ❌ No |
 | Shareable | ✅ Yes (notebooks) | ❌ No |
 | No installation | ✅ JupyterLite | ❌ Requires Python |

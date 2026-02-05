@@ -15,7 +15,7 @@ This module provides an ipywidgets-based GUI that works in:
 - VS Code Jupyter extension
 """
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 import ipywidgets as widgets
 from IPython.display import display, HTML, Markdown
@@ -28,6 +28,10 @@ class EquationGUIJupyter:
     """Interactive GUI for displaying and manipulating equations in Jupyter."""
     
     def __init__(self):
+        # Generate unique instance ID
+        import time
+        self.instance_id = f"eqgui_{int(time.time() * 1000000)}"
+        
         # Current state
         self.current_equations = []
         self.current_values = {}
@@ -99,6 +103,9 @@ class EquationGUIJupyter:
             self.output_area
         ])
         
+        # Add instance ID as CSS class to container for JavaScript to find
+        self.container.add_class(f'eqgui-instance-{self.instance_id}')
+        
         # Initial render
         self._update_display()
         
@@ -117,55 +124,14 @@ class EquationGUIJupyter:
         info = widgets.HTML(
             "<p style='margin: 5px 0; color: #666; font-size: 12px;'>"
             "<b>Left-click symbols</b> to highlight them. "
-            "<b>Right-click symbols</b> for elimination/isolation options. "
-            "Or use dropdowns below."
+            "<b>Right-click symbols</b> for elimination/isolation options."
             "</p>"
         )
-        
-        # Eliminate variable dropdown
-        self.eliminate_dropdown = widgets.Dropdown(
-            description='Eliminate:',
-            options=['(select variable)'],
-            disabled=True,
-            layout=widgets.Layout(width='300px')
-        )
-        self.eliminate_dropdown.observe(self._on_eliminate_variable, names='value')
-        
-        # Eliminate using specific equation dropdown (two-stage)
-        self.eliminate_using_var_dropdown = widgets.Dropdown(
-            description='Eliminate:',
-            options=['(select variable)'],
-            disabled=True,
-            layout=widgets.Layout(width='250px')
-        )
-        self.eliminate_using_eq_dropdown = widgets.Dropdown(
-            description='Using eq:',
-            options=['(select equation)'],
-            disabled=True,
-            layout=widgets.Layout(width='400px')
-        )
-        self.eliminate_using_var_dropdown.observe(self._on_eliminate_using_var_selected, names='value')
-        self.eliminate_using_eq_dropdown.observe(self._on_eliminate_using_equation, names='value')
-        
-        eliminate_using_box = widgets.HBox([
-            self.eliminate_using_var_dropdown,
-            self.eliminate_using_eq_dropdown
-        ])
-        
-        # Clear selection button
-        clear_button = widgets.Button(
-            description='Clear Selection',
-            button_style='info',
-            layout=widgets.Layout(width='150px')
-        )
-        clear_button.on_click(self._on_clear_selection)
         
         # Layout
         controls = widgets.VBox([
             title,
-            info,
-            widgets.HBox([self.eliminate_dropdown, clear_button]),
-            eliminate_using_box
+            info
         ], layout=widgets.Layout(padding='10px', background_color='#f9f9f9', border='1px solid #ddd'))
         
         return controls
@@ -181,9 +147,6 @@ class EquationGUIJupyter:
             # Render all history items
             for idx, (description, equations, values, want) in enumerate(self.history):
                 self._render_history_item(idx, description, equations, values, want)
-        
-        # Update control panel dropdowns
-        self._update_control_panel()
     
     def _render_history_item(self, idx: int, description: str, equations, values, want):
         """Render a single history item."""
@@ -278,7 +241,8 @@ class EquationGUIJupyter:
             # Create a wrapper with symbol mapping for accurate click detection
             symbol_mapping_json = json.dumps(latex_to_symbol).replace('"', '&quot;')
             result = f"""<span class="equation-expr clickable-symbol" style="cursor: pointer; display: inline-block;" 
-                           data-symbol-map="{symbol_mapping_json}">{latex_html}</span>"""
+                           data-symbol-map="{symbol_mapping_json}"
+                           data-instance-id="{self.instance_id}">{latex_html}</span>"""
         else:
             result = f"<span>{latex_html}</span>"
         
@@ -507,7 +471,53 @@ class EquationGUIJupyter:
             
             var newValue = symbolStr + '_' + Date.now();
             
-            // Find the hidden text widget by searching up the DOM tree
+            // Get the instance ID from the clicked element
+            var instanceId = wrapper.getAttribute('data-instance-id');
+            
+            // Find the container for this instance
+            var container = null;
+            if (instanceId) {
+                var elem = wrapper;
+                for (var k = 0; k < 20 && elem; k++) {
+                    if (elem.classList && elem.classList.contains('eqgui-instance-' + instanceId)) {
+                        container = elem;
+                        break;
+                    }
+                    elem = elem.parentElement;
+                }
+            }
+            
+            // Find the hidden text widget within this container
+            if (container) {
+                var inputs = container.querySelectorAll('input[type="text"]');
+                var hiddenInputs = [];
+                for (var i = 0; i < inputs.length; i++) {
+                    var input = inputs[i];
+                    var parent = input.parentElement;
+                    if (parent && parent.style && parent.style.display === 'none') {
+                        hiddenInputs.push(input);
+                    }
+                }
+                
+                // First hidden input should be click bridge
+                if (hiddenInputs.length > 0) {
+                    var input = hiddenInputs[0];
+                    input.value = newValue;
+                    
+                    // Trigger events to notify ipywidgets
+                    var inputEvent = new Event('input', { bubbles: true });
+                    var changeEvent = new Event('change', { bubbles: true });
+                    input.dispatchEvent(inputEvent);
+                    input.dispatchEvent(changeEvent);
+                    
+                    console.log('Symbol click registered:', symbolStr, 'for instance:', instanceId);
+                    return; // Success!
+                }
+                console.error('Could not find click bridge in container for instance:', instanceId);
+                return;
+            }
+            
+            // Fallback: old method for backward compatibility
             var searchRoot = wrapper;
             for (var k = 0; k < 10; k++) {
                 searchRoot = searchRoot.parentElement;
@@ -657,6 +667,12 @@ class EquationGUIJupyter:
                 if (idParts.length >= 3) {
                     eqIdx = parseInt(idParts[2]);
                 }
+            }
+            
+            // Store instance ID globally for context menu commands
+            var instanceId = wrapper.getAttribute('data-instance-id');
+            if (instanceId) {
+                window._lastClickedInstanceId = instanceId;
             }
             
             // Show context menu
@@ -887,7 +903,45 @@ class EquationGUIJupyter:
         }
         
         function sendContextMenuCommand(command) {
-            // Find the hidden context menu widget
+            // Get instance ID from the last clicked element (stored globally)
+            var instanceId = window._lastClickedInstanceId;
+            
+            if (instanceId) {
+                // Find the container for this instance
+                var containers = document.querySelectorAll('.eqgui-instance-' + instanceId);
+                if (containers.length > 0) {
+                    var container = containers[0];
+                    var inputs = container.querySelectorAll('input[type="text"]');
+                    var hiddenInputs = [];
+                    for (var i = 0; i < inputs.length; i++) {
+                        var input = inputs[i];
+                        var parent = input.parentElement;
+                        if (parent && parent.style && parent.style.display === 'none') {
+                            hiddenInputs.push(input);
+                        }
+                    }
+                    
+                    // Second hidden input should be context menu bridge
+                    if (hiddenInputs.length >= 2) {
+                        var input = hiddenInputs[1];
+                        var testValue = command + '_' + Date.now();
+                        input.value = testValue;
+                        
+                        var inputEvent = new Event('input', { bubbles: true });
+                        var changeEvent = new Event('change', { bubbles: true });
+                        input.dispatchEvent(inputEvent);
+                        input.dispatchEvent(changeEvent);
+                        
+                        console.log('Context menu command sent:', command, 'for instance:', instanceId);
+                        return;
+                    }
+                    console.error('Could not find context menu bridge in container for instance:', instanceId);
+                    return;
+                }
+                console.error('Could not find container for instance:', instanceId);
+            }
+            
+            // Fallback: Find the hidden context menu widget using old method
             // Look for hidden text inputs and try to find the second one (context menu bridge)
             var inputs = document.querySelectorAll('input[type="text"]');
             var hiddenInputs = [];
@@ -1029,123 +1083,6 @@ class EquationGUIJupyter:
         
         # Reset the bridge
         self.context_menu_bridge.value = ''
-    
-    def _update_control_panel(self):
-        """Update the control panel dropdowns based on current equations."""
-        if not self.history:
-            return
-        
-        _, current_eqs, _, _ = self.history[-1]
-        
-        # Get all symbols from current equations
-        all_symbols = set()
-        for eq in current_eqs:
-            if eq != True and isinstance(eq, sp.Equality):
-                all_symbols.update(eq.free_symbols)
-        
-        symbol_options = ['(select variable)'] + sorted([str(s) for s in all_symbols])
-        
-        # Update eliminate dropdown
-        self.eliminate_dropdown.options = symbol_options
-        self.eliminate_dropdown.disabled = len(all_symbols) == 0
-        self.eliminate_dropdown.value = '(select variable)'
-        
-        # Update eliminate-using variable dropdown
-        self.eliminate_using_var_dropdown.options = symbol_options
-        self.eliminate_using_var_dropdown.disabled = len(all_symbols) == 0
-        self.eliminate_using_var_dropdown.value = '(select variable)'
-        
-        # Reset equation dropdown
-        self.eliminate_using_eq_dropdown.options = ['(select equation)']
-        self.eliminate_using_eq_dropdown.disabled = True
-        self.eliminate_using_eq_dropdown.value = '(select equation)'
-    
-    def _on_eliminate_variable(self, change):
-        """Handle eliminate variable dropdown selection."""
-        if change['new'] == '(select variable)':
-            return
-        
-        symbol_str = change['new']
-        
-        # Find the symbol object
-        symbol = self._find_symbol(symbol_str)
-        if symbol is None:
-            return
-        
-        # Eliminate the variable
-        self._eliminate_variable(symbol)
-        
-        # Reset dropdown
-        self.eliminate_dropdown.value = '(select variable)'
-    
-    def _on_eliminate_using_var_selected(self, change):
-        """Handle variable selection for eliminate-using operation."""
-        if change['new'] == '(select variable)':
-            self.eliminate_using_eq_dropdown.options = ['(select equation)']
-            self.eliminate_using_eq_dropdown.disabled = True
-            return
-        
-        symbol_str = change['new']
-        symbol = self._find_symbol(symbol_str)
-        
-        if symbol is None:
-            return
-        
-        # Get current equations
-        _, current_eqs, _, _ = self.history[-1]
-        
-        # Find equations containing this symbol
-        equations_with_symbol = [
-            (idx, eq) for idx, eq in enumerate(current_eqs)
-            if eq != True and isinstance(eq, sp.Equality) and symbol in eq.free_symbols
-        ]
-        
-        if not equations_with_symbol:
-            self.eliminate_using_eq_dropdown.options = ['(no equations found)']
-            self.eliminate_using_eq_dropdown.disabled = True
-            return
-        
-        # Create options
-        eq_options = ['(select equation)'] + [
-            f"Eq {idx+1}: {self._format_equation_short(eq)}"
-            for idx, eq in equations_with_symbol
-        ]
-        
-        self.eliminate_using_eq_dropdown.options = eq_options
-        self.eliminate_using_eq_dropdown.disabled = False
-        self.eliminate_using_eq_dropdown.value = '(select equation)'
-    
-    def _on_eliminate_using_equation(self, change):
-        """Handle equation selection for eliminate-using operation."""
-        if change['new'] == '(select equation)':
-            return
-        
-        # Parse the selection
-        eq_str = change['new']
-        if not eq_str.startswith('Eq '):
-            return
-        
-        # Extract equation index
-        eq_idx = int(eq_str.split(':')[0].replace('Eq ', '')) - 1
-        
-        # Get symbol and equation
-        symbol_str = self.eliminate_using_var_dropdown.value
-        symbol = self._find_symbol(symbol_str)
-        
-        _, current_eqs, _, _ = self.history[-1]
-        source_equation = current_eqs[eq_idx]
-        
-        # Eliminate using this equation
-        self._eliminate_using_equation(symbol, source_equation)
-        
-        # Reset dropdowns
-        self.eliminate_using_var_dropdown.value = '(select variable)'
-        self.eliminate_using_eq_dropdown.value = '(select equation)'
-    
-    def _on_clear_selection(self, button):
-        """Handle clear selection button click."""
-        self.selected_symbol = None
-        self._update_display()
     
     def _find_symbol(self, symbol_str: str):
         """Find a symbol object by its string representation."""

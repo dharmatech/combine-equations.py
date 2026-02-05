@@ -649,15 +649,25 @@ class EquationGUIJupyter:
                 return false;
             }
             
+            // Get the equation index from the clicked element
+            var eqIdx = null;
+            var eqDiv = wrapper.closest('[id^="eq_"]');
+            if (eqDiv) {
+                var idParts = eqDiv.id.split('_');
+                if (idParts.length >= 3) {
+                    eqIdx = parseInt(idParts[2]);
+                }
+            }
+            
             // Show context menu
-            showContextMenu(event.clientX, event.clientY, symbolStr);
+            showContextMenu(event.clientX, event.clientY, symbolStr, eqIdx);
             
             // Return false to prevent any other handlers
             return false;
         }, true); // Use capture phase for better event control
         
         // Function to show context menu
-        function showContextMenu(x, y, symbol) {
+        function showContextMenu(x, y, symbol, eqIdx) {
             // Close any existing menu
             if (window._activeContextMenu) {
                 window._activeContextMenu.remove();
@@ -680,7 +690,11 @@ class EquationGUIJupyter:
             addMenuItem(menu, "Eliminate '" + symbol + "' (auto)", 'eliminate_auto:' + symbol, false);
             addMenuItemWithSubmenu(menu, "Eliminate '" + symbol + "' using...", symbol, x, y, 'eliminate');
             menu.appendChild(createSeparator());
-            addMenuItem(menu, "Isolate '" + symbol + "' (auto)", 'isolate_auto:' + symbol, false);
+            
+            // If we know which equation was clicked, show direct "Isolate" option
+            if (eqIdx !== null) {
+                addMenuItem(menu, "Isolate '" + symbol + "'", 'isolate:' + symbol + ':' + eqIdx, false);
+            }
             addMenuItemWithSubmenu(menu, "Isolate '" + symbol + "' in...", symbol, x, y, 'isolate');
             menu.appendChild(createSeparator());
             addMenuItem(menu, "Clear selection", 'clear_selection', false);
@@ -988,6 +1002,17 @@ class EquationGUIJupyter:
                 if len(equations_with_symbol) > 0:
                     idx, eq = equations_with_symbol[0]
                     self._isolate_variable(symbol, eq, idx)
+        elif command.startswith('isolate:'):
+            # Parse format: isolate:symbol:eq_idx (direct isolate for clicked equation)
+            parts = command.split(':', 2)
+            if len(parts) == 3:
+                symbol_str = parts[1]
+                eq_idx = int(parts[2])
+                symbol = self._find_symbol(symbol_str)
+                if symbol:
+                    _, current_eqs, _, _ = self.history[-1]
+                    if eq_idx < len(current_eqs):
+                        self._isolate_variable(symbol, current_eqs[eq_idx], eq_idx)
         elif command.startswith('isolate_using:'):
             # Parse format: isolate_using:symbol:eq_idx
             parts = command.split(':', 2)

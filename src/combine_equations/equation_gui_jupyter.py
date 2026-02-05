@@ -15,13 +15,14 @@ This module provides an ipywidgets-based GUI that works in:
 - VS Code Jupyter extension
 """
 
-__version__ = "1.2.1"
+__version__ = "1.3.0"
 
 import ipywidgets as widgets
 from IPython.display import display, HTML, Markdown
 import sympy as sp
 from typing import List, Dict, Any, Optional, Tuple
 import html
+import re
 
 
 class EquationGUIJupyter:
@@ -168,824 +169,470 @@ class EquationGUIJupyter:
     
     def _render_equation(self, eq, values, want, history_idx: int, eq_idx: int):
         """Render a single equation with syntax highlighting and clickable symbols."""
-        # Get all symbols in the equation
-        all_symbols = sorted(eq.free_symbols, key=lambda s: str(s))
-        
-        # Build colored LaTeX with clickable symbols
-        lhs_colored = self._colorize_latex(eq.lhs, values, want, all_symbols, clickable=True)
-        rhs_colored = self._colorize_latex(eq.rhs, values, want, all_symbols, clickable=True)
+        # Build HTML for each side using recursive expression-to-HTML converter
+        lhs_html = self._expr_to_html(eq.lhs, values, want)
+        rhs_html = self._expr_to_html(eq.rhs, values, want)
         
         # Create equation display with unique ID
         eq_id = f"eq_{history_idx}_{eq_idx}"
         eq_html = f"""
-        <div id="{eq_id}" style='margin: 8px 0; padding: 10px; background: white; border-left: 3px solid #4CAF50;'>
-            <div style='font-size: 18px; font-family: "Computer Modern", "Times New Roman", serif;'>
-                {lhs_colored} = {rhs_colored}
-            </div>
+        <div id="{eq_id}" class="equation-row" style='margin: 8px 0; padding: 10px; background: white; border-left: 3px solid #4CAF50;'
+             data-instance-id="{self.instance_id}">
+            <span style='font-size: 18px; display: inline-flex; align-items: center; flex-wrap: wrap; gap: 0 4px;'>
+                {lhs_html}
+                <span style="margin: 0 4px;">=</span>
+                {rhs_html}
+            </span>
         </div>
         """
         
         display(HTML(eq_html))
     
-    def _colorize_latex(self, expr, values, want, all_symbols, clickable=False) -> str:
-        """Convert expression to LaTeX with color highlighting for symbols."""
-        import json
-        latex = sp.latex(expr)
-        
-        # Sort symbols by length (longest first) to avoid partial replacements
-        sorted_symbols = sorted(all_symbols, key=lambda s: len(sp.latex(s)), reverse=True)
-        
-        # Build a map of symbol to its replacement
-        symbol_map = {}
-        # Build a map of LaTeX to symbol name for JavaScript
-        latex_to_symbol = {}
-        
-        # For each symbol, colorize it
-        for symbol in sorted_symbols:
-            symbol_str = str(symbol)
-            symbol_latex = sp.latex(symbol)
-            
-            if symbol_latex not in latex:
-                continue
-            
-            # Store mapping for JavaScript
-            latex_to_symbol[symbol_latex] = symbol_str
-            
-            # Determine color
-            color = 'black'
-            if want is not None and symbol == want:
-                color = '#CC0000'  # Red for target
-            elif values is not None and symbol in values:
-                color = '#00AA00'  # Green for known values
-            
-            # Add highlight if selected
-            is_highlighted = (self.selected_symbol and symbol == self.selected_symbol)
-            
-            # Use \bbox for MathJax background color and \color for text color
-            if is_highlighted:
-                colored_latex = f'\\bbox[yellow,2pt]{{\\color{{{self._color_to_latex(color)}}}{{{symbol_latex}}}}}'
-            else:
-                colored_latex = f'\\color{{{self._color_to_latex(color)}}}{{{symbol_latex}}}'
-            
-            symbol_map[symbol_latex] = (colored_latex, symbol_str)
-        
-        # Replace symbols in LaTeX
-        for symbol_latex, (colored_latex, symbol_str) in symbol_map.items():
-            latex = latex.replace(symbol_latex, colored_latex)
-        
-        # Wrap in LaTeX delimiters
-        latex_html = f"\\({latex}\\)"
-        
-        # If clickable, wrap the entire expression in a clickable span with data attribute
-        if clickable:
-            # Create a wrapper with symbol mapping for accurate click detection
-            symbol_mapping_json = json.dumps(latex_to_symbol).replace('"', '&quot;')
-            result = f"""<span class="equation-expr clickable-symbol" style="cursor: pointer; display: inline-block;" 
-                           data-symbol-map="{symbol_mapping_json}"
-                           data-instance-id="{self.instance_id}">{latex_html}</span>"""
-        else:
-            result = f"<span>{latex_html}</span>"
-        
-        return result
+    # ── Recursive expression → HTML converter ──────────────────────────
     
-    def _color_to_latex(self, hex_color: str) -> str:
-        """Convert hex color to LaTeX color name."""
-        color_map = {
-            '#CC0000': 'red',
-            '#00AA00': 'green',
-            'black': 'black'
-        }
-        return color_map.get(hex_color, 'black')
-    
-    def _make_clickable_wrapper(self, latex_html: str, all_symbols) -> str:
-        """Wrap LaTeX HTML with clickable functionality."""
-        # Extract all symbol strings for the data attribute
-        symbol_strs = [str(s) for s in all_symbols]
-        symbols_json = ','.join(symbol_strs)
+    def _expr_to_html(self, expr, values, want) -> str:
+        """Recursively convert a SymPy expression to HTML with per-symbol click targets.
         
-        # Wrap in a span with click handler
-        wrapper = f"""
-        <span class="clickable-equation" data-symbols="{symbols_json}" 
-              style="cursor: pointer; user-select: none; display: inline-block; 
-                     padding: 2px; border-radius: 3px; transition: background-color 0.2s;" 
-              onmouseover="this.style.backgroundColor='#f0f0f0'" 
-              onmouseout="this.style.backgroundColor='transparent'"
-              onclick="handleEquationClick(event, this)"
-              title="Click to highlight symbols in this expression">
-            {latex_html}
-        </span>
+        Each symbol is rendered as its own \\(LaTeX\\) inside a <span class="eqsym">
+        with a data-sym attribute. Equation structure (fractions, sums, products,
+        powers) is rendered using HTML/CSS so click detection is trivially correct.
         """
-        return wrapper
+        # --- Atoms -------------------------------------------------------
+        if isinstance(expr, sp.Symbol):
+            return self._symbol_to_html(expr, values, want)
+        
+        if isinstance(expr, sp.Number):
+            return self._number_to_html(expr)
+        
+        # --- Addition  a + b - c  ----------------------------------------
+        if isinstance(expr, sp.Add):
+            return self._add_to_html(expr, values, want)
+        
+        # --- Multiplication / Division -----------------------------------
+        if isinstance(expr, sp.Mul):
+            return self._mul_to_html(expr, values, want)
+        
+        # --- Powers / Reciprocals ----------------------------------------
+        if isinstance(expr, sp.Pow):
+            return self._pow_to_html(expr, values, want)
+        
+        # --- Fallback: render the whole thing as LaTeX (no click targets) -
+        return f'<span>\\({sp.latex(expr)}\\)</span>'
+    
+    def _symbol_to_html(self, sym: sp.Symbol, values, want) -> str:
+        """Render a single symbol as a clickable HTML span wrapping its LaTeX."""
+        sym_str = str(sym)
+        sym_latex = sp.latex(sym)
+        
+        # Determine color
+        color = 'black'
+        if want is not None and sym == want:
+            color = '#CC0000'
+        elif values is not None and sym in values:
+            color = '#00AA00'
+        
+        # Highlight if selected
+        bg = 'background:yellow;' if (self.selected_symbol and sym == self.selected_symbol) else ''
+        
+        return (
+            f'<span class="eqsym" data-sym="{html.escape(sym_str)}" '
+            f'data-instance-id="{self.instance_id}" '
+            f'style="cursor:pointer;color:{color};{bg}display:inline-block;padding:0 1px;">'
+            f'\\({sym_latex}\\)</span>'
+        )
+    
+    def _number_to_html(self, num) -> str:
+        """Render a numeric value."""
+        return f'<span>\\({sp.latex(num)}\\)</span>'
+    
+    def _add_to_html(self, expr: sp.Add, values, want) -> str:
+        """Render addition: a + b - c."""
+        terms = expr.as_ordered_terms()
+        parts = []
+        for i, term in enumerate(terms):
+            if i == 0:
+                # First term: include its sign only if negative
+                coeff = self._leading_coeff(term)
+                if coeff is not None and coeff < 0:
+                    parts.append('<span style="margin:0 2px;">−</span>')
+                    parts.append(self._expr_to_html(-term, values, want))
+                else:
+                    parts.append(self._expr_to_html(term, values, want))
+            else:
+                coeff = self._leading_coeff(term)
+                if coeff is not None and coeff < 0:
+                    parts.append('<span style="margin:0 2px;">−</span>')
+                    parts.append(self._expr_to_html(-term, values, want))
+                else:
+                    parts.append('<span style="margin:0 2px;">+</span>')
+                    parts.append(self._expr_to_html(term, values, want))
+        return '<span style="display:inline-flex;align-items:center;">' + ''.join(parts) + '</span>'
+    
+    def _leading_coeff(self, expr):
+        """Get the leading numeric coefficient of an expression, or None."""
+        if isinstance(expr, sp.Number):
+            return float(expr)
+        if isinstance(expr, sp.Mul):
+            first = expr.args[0]
+            if isinstance(first, sp.Number):
+                return float(first)
+        return None
+    
+    def _mul_to_html(self, expr: sp.Mul, values, want) -> str:
+        """Render multiplication, detecting fractions (negative powers)."""
+        numer, denom = expr.as_numer_denom()
+        
+        if denom != sp.S.One:
+            # It's a fraction
+            numer_html = self._expr_to_html(numer, values, want)
+            denom_html = self._expr_to_html(denom, values, want)
+            return self._fraction_html(numer_html, denom_html)
+        
+        # Regular product: factor out numeric coefficient, render rest
+        coeff, rest = expr.as_coeff_Mul()
+        
+        factors = []
+        if coeff != 1 and coeff != -1:
+            factors.append(self._number_to_html(abs(coeff)))
+        
+        # Get the remaining factors
+        if rest == sp.S.One:
+            pass  # coeff only
+        elif isinstance(rest, sp.Mul):
+            for factor in rest.args:
+                factors.append(self._expr_to_html(factor, values, want))
+        else:
+            factors.append(self._expr_to_html(rest, values, want))
+        
+        if not factors:
+            factors.append(self._number_to_html(abs(coeff)))
+        
+        # Join factors with thin spaces (implicit multiplication)
+        separator = '<span style="margin:0 1px;"></span>'
+        return separator.join(factors)
+    
+    def _pow_to_html(self, expr: sp.Pow, values, want) -> str:
+        """Render powers: x**2, x**(-1) → 1/x, etc."""
+        base, exp = expr.args
+        
+        if exp == sp.S.NegativeOne:
+            # 1/base → fraction
+            numer_html = self._number_to_html(sp.S.One)
+            denom_html = self._expr_to_html(base, values, want)
+            return self._fraction_html(numer_html, denom_html)
+        
+        if isinstance(exp, sp.Number) and exp < 0:
+            # base^(-n) → 1 / base^n
+            numer_html = self._number_to_html(sp.S.One)
+            denom_html = self._expr_to_html(sp.Pow(base, -exp), values, want)
+            return self._fraction_html(numer_html, denom_html)
+        
+        if isinstance(exp, sp.Rational) and not isinstance(exp, sp.Integer):
+            # Fractional exponent: render as LaTeX fallback for roots etc.
+            return f'<span>\\({sp.latex(expr)}\\)</span>'
+        
+        # Regular power: base^exp
+        base_html = self._expr_to_html(base, values, want)
+        exp_html = self._expr_to_html(exp, values, want)
+        
+        # Wrap base in parens if it's a compound expression
+        if isinstance(base, (sp.Add, sp.Mul)):
+            base_html = f'<span>(</span>{base_html}<span>)</span>'
+        
+        return (
+            f'<span style="display:inline-flex;align-items:baseline;">'
+            f'{base_html}'
+            f'<sup style="font-size:0.7em;">{exp_html}</sup>'
+            f'</span>'
+        )
+    
+    def _fraction_html(self, numer_html: str, denom_html: str) -> str:
+        """Render a fraction using HTML/CSS."""
+        return (
+            '<span class="eq-frac" style="display:inline-flex;flex-direction:column;'
+            'align-items:center;vertical-align:middle;margin:0 2px;">'
+            f'<span style="padding:1px 4px;border-bottom:1.2px solid currentColor;'
+            f'display:inline-flex;align-items:center;justify-content:center;">{numer_html}</span>'
+            f'<span style="padding:1px 4px;'
+            f'display:inline-flex;align-items:center;justify-content:center;">{denom_html}</span>'
+            '</span>'
+        )
     
     def _inject_javascript(self):
-        """Inject JavaScript for handling symbol clicks and context menu using event delegation."""
+        """Inject JavaScript for handling symbol clicks and context menu using event delegation.
         
-        # First inject CSS for context menu
+        With the new per-symbol HTML approach, each symbol lives in its own
+        <span class="eqsym" data-sym="symbol_name"> element.  Click detection
+        is trivial: walk up from the event target to find the nearest .eqsym
+        ancestor and read its data-sym attribute.  No text-matching or position
+        heuristics needed.
+        """
+        
+        # First inject CSS for context menu and equation styles
         self._inject_context_menu_css()
         
         js_code = """
         <script>
-        // Only add listener once - check if already added
+        // Only add listener once
         if (!window._equationGuiListenerAdded) {
             window._equationGuiListenerAdded = true;
             
-            // Context menu state
             window._activeContextMenu = null;
             
-            // Use event delegation - attach listener to document
+            // ── Helper: find the nearest .eqsym ancestor (or self) ──────
+            function findEqSym(target) {
+                var el = target;
+                for (var i = 0; i < 20 && el; i++) {
+                    if (el.classList && el.classList.contains('eqsym')) {
+                        return el;
+                    }
+                    el = el.parentElement;
+                }
+                return null;
+            }
+            
+            // ── Helper: find the .equation-row ancestor to get eq index ─
+            function findEquationRow(target) {
+                var el = target;
+                for (var i = 0; i < 30 && el; i++) {
+                    if (el.classList && el.classList.contains('equation-row')) {
+                        return el;
+                    }
+                    el = el.parentElement;
+                }
+                return null;
+            }
+            
+            // ── Helper: send value to hidden bridge widget ──────────────
+            function sendToBridge(instanceId, bridgeIndex, value) {
+                // Find instance container
+                var container = null;
+                if (instanceId) {
+                    var containers = document.querySelectorAll('.eqgui-instance-' + instanceId);
+                    if (containers.length > 0) container = containers[0];
+                }
+                if (!container) return false;
+                
+                var inputs = container.querySelectorAll('input[type="text"]');
+                var hiddenInputs = [];
+                for (var i = 0; i < inputs.length; i++) {
+                    var p = inputs[i].parentElement;
+                    if (p && p.style && p.style.display === 'none') {
+                        hiddenInputs.push(inputs[i]);
+                    }
+                }
+                if (hiddenInputs.length > bridgeIndex) {
+                    var input = hiddenInputs[bridgeIndex];
+                    input.value = value;
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                    return true;
+                }
+                return false;
+            }
+            
+            // ── Left-click: highlight symbol ────────────────────────────
             document.addEventListener('click', function(event) {
-                // Close context menu on any click
+                // Close any context menu
                 if (window._activeContextMenu) {
                     window._activeContextMenu.remove();
                     window._activeContextMenu = null;
                 }
-                // Find the clicked element or its parent with the clickable-symbol class
-                var element = event.target;
-                var wrapper = null;
                 
-                // Walk up to find the span with data-symbol-map (increased depth for MathJax fractions)
-                for (var i = 0; i < 20 && element; i++) {
-                    if (element.classList && element.classList.contains('clickable-symbol')) {
-                        wrapper = element;
-                        break;
-                    }
-                    element = element.parentElement;
-                }
+                var symSpan = findEqSym(event.target);
+                if (!symSpan) return;
                 
-                if (!wrapper) {
-                    // Debug: check if this was in an equation area
-                    var checkEl = event.target;
-                    for (var i = 0; i < 20 && checkEl; i++) {
-                        if (checkEl.classList && checkEl.classList.contains('equation-expr')) {
-                            console.log('Found equation-expr but not clickable-symbol at level', i);
-                            console.log('Element:', checkEl);
-                            break;
-                        }
-                        checkEl = checkEl.parentElement;
-                    }
-                    return; // Not a symbol click
-                }
-            
-            // Get symbol mapping from element's data attribute
-            var symbolMapStr = wrapper.getAttribute('data-symbol-map');
-            if (!symbolMapStr) {
-                console.error('No symbol mapping found');
-                return;
-            }
-            
-            var symbolMap = JSON.parse(symbolMapStr);
-            
-            // Try to get text from the clicked target first (more specific)
-            // For fractions, we want to identify if we're in numerator or denominator
-            var target = event.target;
-            var clickedText = '';
-            var foundMatch = false;
-            
-            // Walk up from target, trying to find the smallest element with matching symbols
-            var testElement = target;
-            for (var j = 0; j < 15 && testElement && testElement !== wrapper; j++) {
-                var text = testElement.textContent || testElement.innerText;
-                if (text && text.trim().length >= 2) {
-                    var testClean = text.trim().replace(/[\\s\\u2212+*/=()\\[\\]\\-]/g, '');
-                    // Check if this text contains any symbol
-                    for (var key in symbolMap) {
-                        var cleanPattern = key.replace(/[_{}\\s]/g, '');
-                        if (testClean.includes(cleanPattern)) {
-                            clickedText = text.trim();
-                            foundMatch = true;
-                            break;
-                        }
-                    }
-                    if (foundMatch) break;
-                }
-                testElement = testElement.parentElement;
-            }
-            
-            // Fallback to wrapper if no match found
-            if (!clickedText || !clickedText.trim()) {
-                clickedText = wrapper.textContent || wrapper.innerText;
-            }
-            
-            if (!clickedText || !clickedText.trim()) {
-                console.log('No text found in clicked element');
-                return;
-            }
-            
-            clickedText = clickedText.trim();
-            console.log('Clicked text:', clickedText);
-            
-            // Find all matching symbols
-            var cleanText = clickedText.replace(/[\\s\\u2212+*/=()\\[\\]\\-]/g, '');
-            var matches = [];
-            
-            for (var key in symbolMap) {
-                var cleanPattern = key.replace(/[_{}\\s]/g, '');
-                if (cleanText.includes(cleanPattern)) {
-                    matches.push({
-                        latex: key,
-                        symbol: symbolMap[key],
-                        pattern: cleanPattern,
-                        index: cleanText.indexOf(cleanPattern)
-                    });
-                }
-            }
-            
-            var symbolStr = null;
-            
-            if (matches.length === 0) {
-                // No matches - use first symbol as fallback
-                var keys = Object.keys(symbolMap);
-                symbolStr = symbolMap[keys[0]];
-                console.log('No match found, using fallback:', symbolStr);
-            } else if (matches.length === 1) {
-                // Single match - use it
-                symbolStr = matches[0].symbol;
-            } else {
-                // Multiple matches - use X position (and Y for fractions)
-                matches.sort(function(a, b) { return a.index - b.index; });
+                var symbolStr = symSpan.getAttribute('data-sym');
+                var instanceId = symSpan.getAttribute('data-instance-id');
+                if (!symbolStr || !instanceId) return;
                 
-                var rect = wrapper.getBoundingClientRect();
-                var clickX = event.clientX - rect.left;
-                var clickY = event.clientY - rect.top;
-                var clickRatioX = clickX / rect.width;
-                var clickRatioY = clickY / rect.height;
+                sendToBridge(instanceId, 0, symbolStr + '_' + Date.now());
+                console.log('Symbol click:', symbolStr);
+            });
+            
+            // ── Right-click: context menu ───────────────────────────────
+            document.addEventListener('contextmenu', function(event) {
+                var symSpan = findEqSym(event.target);
+                if (!symSpan) return true;
                 
-                var textLen = cleanText.length;
-                var filtered = matches;
-                
-                // Get the LaTeX source from the wrapper's innerHTML to check for fractions
-                var wrapperHTML = wrapper.innerHTML || '';
-                var hasFraction = wrapperHTML.indexOf('frac') !== -1;
-                
-                if (hasFraction) {
-                    // Use Y position to filter to numerator or denominator group
-                    // If Y < 0.5, keep symbols in first half of text (numerator)
-                    // If Y >= 0.5, keep symbols in second half of text (denominator)
-                    var midIndex = textLen / 2;
-                    filtered = matches.filter(function(m) {
-                        var isInFirstHalf = (m.index + m.pattern.length / 2) < midIndex;
-                        return clickRatioY < 0.5 ? isInFirstHalf : !isInFirstHalf;
-                    });
-                    
-                    // If filter removed everything, use all matches
-                    if (filtered.length === 0) {
-                        filtered = matches;
-                    }
-                    
-                    console.log('Y filter (fraction): clickY=' + clickRatioY.toFixed(2) + ', filtered to:', filtered.map(function(m) { return m.symbol; }));
-                } else {
-                    console.log('No fraction - using X position only');
-                }
-                
-                // Step 2: Within filtered group, use X position
-                var bestMatch = filtered[0];
-                
-                if (filtered.length > 1) {
-                    // Find the visual positions of filtered symbols relative to each other
-                    var minIdx = filtered[0].index;
-                    var maxIdx = filtered[filtered.length - 1].index + filtered[filtered.length - 1].pattern.length;
-                    var span = maxIdx - minIdx;
-                    
-                    var bestDist = 999;
-                    for (var mi = 0; mi < filtered.length; mi++) {
-                        var m = filtered[mi];
-                        // Position within the filtered group (0 to 1)
-                        var relPos = span > 0 ? (m.index - minIdx + m.pattern.length / 2) / span : 0.5;
-                        var dist = Math.abs(relPos - clickRatioX);
-                        if (dist < bestDist) {
-                            bestDist = dist;
-                            bestMatch = m;
-                        }
-                    }
-                }
-                
-                symbolStr = bestMatch.symbol;
-                console.log('Final pick: clickX=' + clickRatioX.toFixed(2) + ', picked:', symbolStr);
-                console.log('All matches:', matches.map(function(m) { return m.symbol + '@' + m.index; }));
-            }
-            
-            if (!symbolStr) {
-                console.log('No symbol found');
-                return;
-            }
-            
-            var newValue = symbolStr + '_' + Date.now();
-            
-            // Get the instance ID from the clicked element
-            var instanceId = wrapper.getAttribute('data-instance-id');
-            
-            // Find the container for this instance
-            var container = null;
-            if (instanceId) {
-                var elem = wrapper;
-                for (var k = 0; k < 20 && elem; k++) {
-                    if (elem.classList && elem.classList.contains('eqgui-instance-' + instanceId)) {
-                        container = elem;
-                        break;
-                    }
-                    elem = elem.parentElement;
-                }
-            }
-            
-            // Find the hidden text widget within this container
-            if (container) {
-                var inputs = container.querySelectorAll('input[type="text"]');
-                var hiddenInputs = [];
-                for (var i = 0; i < inputs.length; i++) {
-                    var input = inputs[i];
-                    var parent = input.parentElement;
-                    if (parent && parent.style && parent.style.display === 'none') {
-                        hiddenInputs.push(input);
-                    }
-                }
-                
-                // First hidden input should be click bridge
-                if (hiddenInputs.length > 0) {
-                    var input = hiddenInputs[0];
-                    input.value = newValue;
-                    
-                    // Trigger events to notify ipywidgets
-                    var inputEvent = new Event('input', { bubbles: true });
-                    var changeEvent = new Event('change', { bubbles: true });
-                    input.dispatchEvent(inputEvent);
-                    input.dispatchEvent(changeEvent);
-                    
-                    console.log('Symbol click registered:', symbolStr, 'for instance:', instanceId);
-                    return; // Success!
-                }
-                console.error('Could not find click bridge in container for instance:', instanceId);
-                return;
-            }
-            
-            // Fallback: old method for backward compatibility
-            var searchRoot = wrapper;
-            for (var k = 0; k < 10; k++) {
-                searchRoot = searchRoot.parentElement;
-                if (!searchRoot) break;
-                
-                // Look for the hidden input in this container
-                var inputs = searchRoot.querySelectorAll('input[type="text"]');
-                for (var m = 0; m < inputs.length; m++) {
-                    var input = inputs[m];
-                    // Check if this is a hidden widget
-                    var parent = input.parentElement;
-                    if (parent && parent.style && parent.style.display === 'none') {
-                        // Found it! Update the value
-                        input.value = newValue;
-                        
-                        // Trigger events to notify ipywidgets
-                        var inputEvent = new Event('input', { bubbles: true });
-                        var changeEvent = new Event('change', { bubbles: true });
-                        input.dispatchEvent(inputEvent);
-                        input.dispatchEvent(changeEvent);
-                        
-                        console.log('Symbol click registered:', symbolStr);
-                        return; // Success!
-                    }
-                }
-            }
-            console.error('Could not find hidden widget');
-        });
-        
-        // Right-click handler for context menu (use capture phase for better control)
-        document.addEventListener('contextmenu', function(event) {
-            // Find the clicked element or its parent with the clickable-symbol class
-            var element = event.target;
-            var wrapper = null;
-            
-            // Walk up to find the span with data-symbol-map
-            for (var i = 0; i < 20 && element; i++) {
-                if (element.classList && element.classList.contains('clickable-symbol')) {
-                    wrapper = element;
-                    break;
-                }
-                element = element.parentElement;
-            }
-            
-            if (!wrapper) {
-                return true; // Not a symbol - allow default context menu
-            }
-            
-            // Prevent default browser context menu
-            event.preventDefault();
-            event.stopPropagation();
-            event.stopImmediatePropagation();
-            
-            // Get symbol from click (reuse existing logic)
-            var symbolMapStr = wrapper.getAttribute('data-symbol-map');
-            if (!symbolMapStr) {
-                return;
-            }
-            
-            var symbolMap = JSON.parse(symbolMapStr);
-            var target = event.target;
-            var clickedText = '';
-            var foundMatch = false;
-            
-            // Find clicked text
-            var testElement = target;
-            for (var j = 0; j < 15 && testElement && testElement !== wrapper; j++) {
-                var text = testElement.textContent || testElement.innerText;
-                if (text && text.trim().length >= 2) {
-                    var testClean = text.trim().replace(/[\\s\\u2212+*/=()\\[\\]\\-]/g, '');
-                    for (var key in symbolMap) {
-                        var cleanPattern = key.replace(/[_{}\\s]/g, '');
-                        if (testClean.includes(cleanPattern)) {
-                            clickedText = text.trim();
-                            foundMatch = true;
-                            break;
-                        }
-                    }
-                    if (foundMatch) break;
-                }
-                testElement = testElement.parentElement;
-            }
-            
-            if (!clickedText || !clickedText.trim()) {
-                clickedText = wrapper.textContent || wrapper.innerText;
-            }
-            
-            if (!clickedText || !clickedText.trim()) {
-                return;
-            }
-            
-            clickedText = clickedText.trim();
-            
-            // Find matching symbols
-            var cleanText = clickedText.replace(/[\\s\\u2212+*/=()\\[\\]\\-]/g, '');
-            var matches = [];
-            
-            for (var key in symbolMap) {
-                var cleanPattern = key.replace(/[_{}\\s]/g, '');
-                if (cleanText.includes(cleanPattern)) {
-                    matches.push({
-                        latex: key,
-                        symbol: symbolMap[key],
-                        pattern: cleanPattern,
-                        index: cleanText.indexOf(cleanPattern)
-                    });
-                }
-            }
-            
-            var symbolStr = null;
-            
-            if (matches.length === 0) {
-                var keys = Object.keys(symbolMap);
-                symbolStr = symbolMap[keys[0]];
-            } else if (matches.length === 1) {
-                symbolStr = matches[0].symbol;
-            } else {
-                // Use position-based selection (similar to click handler)
-                matches.sort(function(a, b) { return a.index - b.index; });
-                var rect = wrapper.getBoundingClientRect();
-                var clickX = event.clientX - rect.left;
-                var clickRatioX = clickX / rect.width;
-                symbolStr = matches[0].symbol;
-                
-                var bestDist = 999;
-                for (var mi = 0; mi < matches.length; mi++) {
-                    var m = matches[mi];
-                    var relPos = m.index / cleanText.length;
-                    var dist = Math.abs(relPos - clickRatioX);
-                    if (dist < bestDist) {
-                        bestDist = dist;
-                        symbolStr = m.symbol;
-                    }
-                }
-            }
-            
-            if (!symbolStr) {
                 event.preventDefault();
-                return false;
-            }
-            
-            // Get the equation index from the clicked element
-            var eqIdx = null;
-            var eqDiv = wrapper.closest('[id^="eq_"]');
-            if (eqDiv) {
-                var idParts = eqDiv.id.split('_');
-                if (idParts.length >= 3) {
-                    eqIdx = parseInt(idParts[2]);
-                }
-            }
-            
-            // Store instance ID globally for context menu commands
-            var instanceId = wrapper.getAttribute('data-instance-id');
-            if (instanceId) {
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+                
+                var symbolStr = symSpan.getAttribute('data-sym');
+                var instanceId = symSpan.getAttribute('data-instance-id');
+                if (!symbolStr || !instanceId) return false;
+                
+                // Store for context menu commands
                 window._lastClickedInstanceId = instanceId;
-            }
-            
-            // Show context menu
-            showContextMenu(event.clientX, event.clientY, symbolStr, eqIdx);
-            
-            // Return false to prevent any other handlers
-            return false;
-        }, true); // Use capture phase for better event control
-        
-        // Function to show context menu
-        function showContextMenu(x, y, symbol, eqIdx) {
-            // Close any existing menu
-            if (window._activeContextMenu) {
-                window._activeContextMenu.remove();
-            }
-            
-            // Create menu container
-            var menu = document.createElement('div');
-            menu.className = 'equation-context-menu';
-            menu.style.left = x + 'px';
-            menu.style.top = y + 'px';
-            
-            // Prevent context menu on the menu itself
-            menu.oncontextmenu = function(e) {
-                e.preventDefault();
-                e.stopPropagation();
+                
+                // Get equation index from .equation-row ancestor
+                var eqRow = findEquationRow(symSpan);
+                var eqIdx = null;
+                if (eqRow && eqRow.id) {
+                    var parts = eqRow.id.split('_');
+                    if (parts.length >= 3) eqIdx = parseInt(parts[2]);
+                }
+                
+                showContextMenu(event.clientX, event.clientY, symbolStr, eqIdx);
                 return false;
-            };
+            }, true);
             
-            // Add menu items
-            addMenuItem(menu, "Eliminate '" + symbol + "' (auto)", 'eliminate_auto:' + symbol, false);
-            addMenuItemWithSubmenu(menu, "Eliminate '" + symbol + "' using...", symbol, x, y, 'eliminate');
-            menu.appendChild(createSeparator());
-            
-            // If we know which equation was clicked, show direct "Isolate" option
-            if (eqIdx !== null) {
-                addMenuItem(menu, "Isolate '" + symbol + "'", 'isolate:' + symbol + ':' + eqIdx, false);
-            }
-            addMenuItemWithSubmenu(menu, "Isolate '" + symbol + "' in...", symbol, x, y, 'isolate');
-            menu.appendChild(createSeparator());
-            addMenuItem(menu, "Clear selection", 'clear_selection', false);
-            
-            // Prevent menu from going off-screen
-            document.body.appendChild(menu);
-            
-            var menuRect = menu.getBoundingClientRect();
-            if (menuRect.right > window.innerWidth) {
-                menu.style.left = (x - menuRect.width) + 'px';
-            }
-            if (menuRect.bottom > window.innerHeight) {
-                menu.style.top = (y - menuRect.height) + 'px';
-            }
-            
-            window._activeContextMenu = menu;
-        }
-        
-        function addMenuItem(menu, label, command, hasSubmenu) {
-            var item = document.createElement('div');
-            item.className = 'equation-context-menu-item';
-            
-            if (hasSubmenu) {
-                // Add arrow indicator for submenu
-                item.innerHTML = label + ' <span style="float: right; margin-left: 20px;">▶</span>';
-            } else {
-                item.textContent = label;
+            // ── Context menu builder ────────────────────────────────────
+            function showContextMenu(x, y, symbol, eqIdx) {
+                if (window._activeContextMenu) {
+                    window._activeContextMenu.remove();
+                }
+                
+                var menu = document.createElement('div');
+                menu.className = 'equation-context-menu';
+                menu.style.left = x + 'px';
+                menu.style.top = y + 'px';
+                menu.oncontextmenu = function(e) { e.preventDefault(); return false; };
+                
+                addMenuItem(menu, "Eliminate '" + symbol + "' (auto)", 'eliminate_auto:' + symbol, false);
+                addMenuItemWithSubmenu(menu, "Eliminate '" + symbol + "' using...", symbol, x, y, 'eliminate');
+                menu.appendChild(createSeparator());
+                
+                if (eqIdx !== null) {
+                    addMenuItem(menu, "Isolate '" + symbol + "'", 'isolate:' + symbol + ':' + eqIdx, false);
+                }
+                addMenuItemWithSubmenu(menu, "Isolate '" + symbol + "' in...", symbol, x, y, 'isolate');
+                menu.appendChild(createSeparator());
+                addMenuItem(menu, "Clear selection", 'clear_selection', false);
+                
+                document.body.appendChild(menu);
+                
+                var r = menu.getBoundingClientRect();
+                if (r.right > window.innerWidth) menu.style.left = (x - r.width) + 'px';
+                if (r.bottom > window.innerHeight) menu.style.top = (y - r.height) + 'px';
+                
+                window._activeContextMenu = menu;
             }
             
-            if (!hasSubmenu) {
+            function addMenuItem(menu, label, command, hasSubmenu) {
+                var item = document.createElement('div');
+                item.className = 'equation-context-menu-item';
+                if (hasSubmenu) {
+                    item.innerHTML = label + ' <span style="float:right;margin-left:20px;">▶</span>';
+                } else {
+                    item.textContent = label;
+                    item.onclick = function(e) {
+                        e.stopPropagation();
+                        sendContextMenuCommand(command);
+                        menu.remove();
+                        window._activeContextMenu = null;
+                    };
+                }
+                menu.appendChild(item);
+                return item;
+            }
+            
+            function addMenuItemWithSubmenu(parentMenu, label, symbol, parentX, parentY, action) {
+                var item = addMenuItem(parentMenu, label, '', true);
+                var submenu = null;
+                
                 item.onclick = function(e) {
                     e.stopPropagation();
-                    sendContextMenuCommand(command);
-                    menu.remove();
-                    window._activeContextMenu = null;
+                    if (submenu) { submenu.remove(); submenu = null; return; }
+                    
+                    getEquationsWithSymbol(symbol, function(equations) {
+                        if (equations.length === 0) return;
+                        
+                        submenu = document.createElement('div');
+                        submenu.className = 'equation-context-menu';
+                        
+                        var itemRect = item.getBoundingClientRect();
+                        var parentRect = parentMenu.getBoundingClientRect();
+                        submenu.style.left = (parentRect.right + 2) + 'px';
+                        submenu.style.top = itemRect.top + 'px';
+                        
+                        for (var i = 0; i < equations.length; i++) {
+                            var eq = equations[i];
+                            var command = action + '_using:' + symbol + ':' + eq.index;
+                            var si = document.createElement('div');
+                            si.className = 'equation-context-menu-item';
+                            si.textContent = 'Eq ' + (eq.index + 1) + ': ' + eq.display;
+                            (function(cmd) {
+                                si.onclick = function(ev) {
+                                    ev.stopPropagation();
+                                    sendContextMenuCommand(cmd);
+                                    if (submenu) { submenu.remove(); submenu = null; }
+                                    if (parentMenu) parentMenu.remove();
+                                    window._activeContextMenu = null;
+                                };
+                            })(command);
+                            submenu.appendChild(si);
+                        }
+                        
+                        document.body.appendChild(submenu);
+                        var sr = submenu.getBoundingClientRect();
+                        if (sr.right > window.innerWidth) submenu.style.left = (parentRect.left - sr.width - 2) + 'px';
+                        if (sr.bottom > window.innerHeight) submenu.style.top = (window.innerHeight - sr.height - 10) + 'px';
+                        
+                        setTimeout(function() {
+                            document.addEventListener('click', function closeSub(ev) {
+                                if (submenu && !submenu.contains(ev.target)) {
+                                    submenu.remove(); submenu = null;
+                                    document.removeEventListener('click', closeSub);
+                                }
+                            });
+                        }, 100);
+                    });
                 };
             }
             
-            menu.appendChild(item);
-            return item;
-        }
-        
-        function addMenuItemWithSubmenu(parentMenu, label, symbol, parentX, parentY, action) {
-            var item = addMenuItem(parentMenu, label, '', true);
-            var submenu = null;
-            
-            // Show submenu on click
-            item.onclick = function(e) {
-                e.stopPropagation();
+            function getEquationsWithSymbol(symbol, callback) {
+                // Find equations containing this symbol by looking for .eqsym elements
+                var equations = [];
+                var eqSyms = document.querySelectorAll('.eqsym[data-sym="' + symbol + '"]');
+                var equationIndices = new Set();
                 
-                // Close existing submenu if any
-                if (submenu) {
-                    submenu.remove();
-                    submenu = null;
-                    return;
+                // Determine the latest history index
+                var allEqRows = document.querySelectorAll('.equation-row[id^="eq_"]');
+                var maxHistIdx = 0;
+                for (var j = 0; j < allEqRows.length; j++) {
+                    var parts = allEqRows[j].id.split('_');
+                    if (parts.length >= 2) maxHistIdx = Math.max(maxHistIdx, parseInt(parts[1]));
                 }
                 
-                // Get equations with this symbol from Python side
-                // We'll request them via a special command
-                getEquationsWithSymbol(symbol, function(equations) {
-                    if (equations.length === 0) {
-                        return;
-                    }
-                    
-                    // Create submenu
-                    submenu = document.createElement('div');
-                    submenu.className = 'equation-context-menu';
-                    
-                    // Position submenu to the right of parent item
-                    var itemRect = item.getBoundingClientRect();
-                    var parentRect = parentMenu.getBoundingClientRect();
-                    submenu.style.left = (parentRect.right + 2) + 'px';
-                    submenu.style.top = itemRect.top + 'px';
-                    
-                    // Add equation options
-                    for (var i = 0; i < equations.length; i++) {
-                        var eq = equations[i];
-                        var command = action + '_using:' + symbol + ':' + eq.index;
-                        // Create submenu item with custom handler that closes both menus
-                        var submenuItem = document.createElement('div');
-                        submenuItem.className = 'equation-context-menu-item';
-                        submenuItem.textContent = 'Eq ' + (eq.index + 1) + ': ' + eq.display;
-                        (function(cmd) {
-                            submenuItem.onclick = function(e) {
-                                e.stopPropagation();
-                                sendContextMenuCommand(cmd);
-                                // Close submenu
-                                if (submenu) {
-                                    submenu.remove();
-                                    submenu = null;
-                                }
-                                // Close parent menu
-                                if (parentMenu) {
-                                    parentMenu.remove();
-                                }
-                                window._activeContextMenu = null;
-                            };
-                        })(command);
-                        submenu.appendChild(submenuItem);
-                    }
-                    
-                    document.body.appendChild(submenu);
-                    
-                    // Adjust if off-screen
-                    var submenuRect = submenu.getBoundingClientRect();
-                    if (submenuRect.right > window.innerWidth) {
-                        submenu.style.left = (parentRect.left - submenuRect.width - 2) + 'px';
-                    }
-                    if (submenuRect.bottom > window.innerHeight) {
-                        submenu.style.top = (window.innerHeight - submenuRect.height - 10) + 'px';
-                    }
-                    
-                    // Close submenu when clicking outside
-                    setTimeout(function() {
-                        document.addEventListener('click', function closeSubmenu(e) {
-                            if (submenu && !submenu.contains(e.target)) {
-                                submenu.remove();
-                                submenu = null;
-                                document.removeEventListener('click', closeSubmenu);
-                            }
-                        });
-                    }, 100);
-                });
-            };
-        }
-        
-        function getEquationsWithSymbol(symbol, callback) {
-            // For now, we'll extract equations directly from the DOM
-            // Look for equation displays in the current view
-            var equations = [];
-            
-            // Find all clickable symbols with this symbol's data
-            var clickableSymbols = document.querySelectorAll('.clickable-symbol');
-            var equationIndices = new Set();
-            
-            for (var i = 0; i < clickableSymbols.length; i++) {
-                var elem = clickableSymbols[i];
-                var symbolMapStr = elem.getAttribute('data-symbol-map');
-                if (symbolMapStr) {
-                    try {
-                        var symbolMap = JSON.parse(symbolMapStr);
-                        // Check if this element contains our symbol
-                        for (var key in symbolMap) {
-                            if (symbolMap[key] === symbol) {
-                                // Extract equation index from parent structure
-                                var eqDiv = elem.closest('[id^="eq_"]');
-                                if (eqDiv) {
-                                    var idParts = eqDiv.id.split('_');
-                                    if (idParts.length >= 3) {
-                                        var histIdx = parseInt(idParts[1]);
-                                        var eqIdx = parseInt(idParts[2]);
-                                        // Only include equations from the latest history item
-                                        var allEqDivs = document.querySelectorAll('[id^="eq_"]');
-                                        var maxHistIdx = 0;
-                                        for (var j = 0; j < allEqDivs.length; j++) {
-                                            var parts = allEqDivs[j].id.split('_');
-                                            if (parts.length >= 2) {
-                                                maxHistIdx = Math.max(maxHistIdx, parseInt(parts[1]));
-                                            }
-                                        }
-                                        if (histIdx === maxHistIdx && !equationIndices.has(eqIdx)) {
-                                            equationIndices.add(eqIdx);
-                                            // Get equation text for display
-                                            var eqText = eqDiv.textContent || '';
-                                            eqText = eqText.trim().substring(0, 40);
-                                            if (eqText.length >= 40) eqText += '...';
-                                            equations.push({
-                                                index: eqIdx,
-                                                display: eqText
-                                            });
-                                        }
-                                    }
-                                }
-                                break;
+                for (var i = 0; i < eqSyms.length; i++) {
+                    var eqRow = findEquationRow(eqSyms[i]);
+                    if (eqRow && eqRow.id) {
+                        var idParts = eqRow.id.split('_');
+                        if (idParts.length >= 3) {
+                            var histIdx = parseInt(idParts[1]);
+                            var eqIdx = parseInt(idParts[2]);
+                            if (histIdx === maxHistIdx && !equationIndices.has(eqIdx)) {
+                                equationIndices.add(eqIdx);
+                                var eqText = eqRow.textContent || '';
+                                eqText = eqText.trim().substring(0, 40);
+                                if (eqText.length >= 40) eqText += '...';
+                                equations.push({ index: eqIdx, display: eqText });
                             }
                         }
-                    } catch(e) {}
+                    }
                 }
+                equations.sort(function(a, b) { return a.index - b.index; });
+                callback(equations);
             }
             
-            // Sort by index
-            equations.sort(function(a, b) { return a.index - b.index; });
-            callback(equations);
-        }
-        
-        function createSeparator() {
-            var sep = document.createElement('div');
-            sep.className = 'equation-context-menu-separator';
-            return sep;
-        }
-        
-        function sendContextMenuCommand(command) {
-            // Get instance ID from the last clicked element (stored globally)
-            var instanceId = window._lastClickedInstanceId;
+            function createSeparator() {
+                var sep = document.createElement('div');
+                sep.className = 'equation-context-menu-separator';
+                return sep;
+            }
             
-            if (instanceId) {
-                // Find the container for this instance
-                var containers = document.querySelectorAll('.eqgui-instance-' + instanceId);
-                if (containers.length > 0) {
-                    var container = containers[0];
-                    var inputs = container.querySelectorAll('input[type="text"]');
-                    var hiddenInputs = [];
-                    for (var i = 0; i < inputs.length; i++) {
-                        var input = inputs[i];
-                        var parent = input.parentElement;
-                        if (parent && parent.style && parent.style.display === 'none') {
-                            hiddenInputs.push(input);
-                        }
-                    }
-                    
-                    // Second hidden input should be context menu bridge
-                    if (hiddenInputs.length >= 2) {
-                        var input = hiddenInputs[1];
-                        var testValue = command + '_' + Date.now();
-                        input.value = testValue;
-                        
-                        var inputEvent = new Event('input', { bubbles: true });
-                        var changeEvent = new Event('change', { bubbles: true });
-                        input.dispatchEvent(inputEvent);
-                        input.dispatchEvent(changeEvent);
-                        
-                        console.log('Context menu command sent:', command, 'for instance:', instanceId);
+            function sendContextMenuCommand(command) {
+                var instanceId = window._lastClickedInstanceId;
+                if (instanceId) {
+                    if (sendToBridge(instanceId, 1, command + '_' + Date.now())) {
+                        console.log('Context menu command:', command);
                         return;
                     }
-                    console.error('Could not find context menu bridge in container for instance:', instanceId);
-                    return;
                 }
-                console.error('Could not find container for instance:', instanceId);
+                console.error('Could not send context menu command');
             }
-            
-            // Fallback: Find the hidden context menu widget using old method
-            // Look for hidden text inputs and try to find the second one (context menu bridge)
-            var inputs = document.querySelectorAll('input[type="text"]');
-            var hiddenInputs = [];
-            
-            for (var i = 0; i < inputs.length; i++) {
-                var input = inputs[i];
-                var parent = input.parentElement;
-                if (parent && parent.style && parent.style.display === 'none') {
-                    hiddenInputs.push(input);
-                }
-            }
-            
-            // We need at least 2 hidden inputs (click_bridge and context_menu_bridge)
-            // The context_menu_bridge should be the second one (or we can try both)
-            if (hiddenInputs.length >= 2) {
-                // Try the second hidden input (context menu bridge)
-                var input = hiddenInputs[1];
-                var testValue = command + '_' + Date.now();
-                input.value = testValue;
-                
-                var inputEvent = new Event('input', { bubbles: true });
-                var changeEvent = new Event('change', { bubbles: true });
-                input.dispatchEvent(inputEvent);
-                input.dispatchEvent(changeEvent);
-                
-                console.log('Context menu command sent:', command);
-                return;
-            } else if (hiddenInputs.length === 1) {
-                // Fallback: only one hidden input, try it anyway
-                var input = hiddenInputs[0];
-                var testValue = command + '_' + Date.now();
-                input.value = testValue;
-                
-                var inputEvent = new Event('input', { bubbles: true });
-                var changeEvent = new Event('change', { bubbles: true });
-                input.dispatchEvent(inputEvent);
-                input.dispatchEvent(changeEvent);
-                
-                console.log('Context menu command sent to single bridge:', command);
-                return;
-            }
-            
-            console.error('Could not find context menu bridge widget. Found', hiddenInputs.length, 'hidden inputs');
-        }
         }
         </script>
         """

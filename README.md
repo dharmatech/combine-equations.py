@@ -36,6 +36,8 @@ Notebook used in the demo available here:
 
 https://github.com/dharmatech/github-pages-test
 
+You can try out the interactive equation solver without installing anything as it runs in a browser.
+
 ## Examples
 
 Examples from the textbook University Physics are here: [examples/up](examples/up).

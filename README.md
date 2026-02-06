@@ -24,6 +24,9 @@ python .\examples\eq-gui\demo_gui_features.py
 
 <img alt="image" src="https://github.com/user-attachments/assets/2a56090d-5e0a-4c09-a80c-72c520e9db6d" />
 
+Video demo:
+
+https://youtu.be/7ysUdxTfKhU?si=KQiYmqjUhq6nNjXn
 
 ## Examples
 

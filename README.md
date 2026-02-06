@@ -20,6 +20,11 @@ python .\examples\eq-gui\demo_gui_features.py
 
 <img width="800" alt="image" src="https://github.com/user-attachments/assets/d7009494-f8b6-4fbf-a51e-50f52e30f2e2" />
 
+## Interactive equation solver for JupyterLite Notebooks
+
+<img alt="image" src="https://github.com/user-attachments/assets/2a56090d-5e0a-4c09-a80c-72c520e9db6d" />
+
+
 ## Examples
 
 Examples from the textbook University Physics are here: [examples/up](examples/up).

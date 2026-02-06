@@ -1,7 +1,7 @@
 
-Video demo of the interactive equation editor:
+# Introduction
 
-https://youtu.be/O837G7cj5fE?si=wk4sURLNVGvgSIRq
+This is a set of experimental Python modules for solving equations in Sympy.
 
 ## `display_equations_`
 
@@ -19,6 +19,10 @@ python .\examples\eq-gui\demo_gui_features.py
 ```
 
 <img width="800" alt="image" src="https://github.com/user-attachments/assets/d7009494-f8b6-4fbf-a51e-50f52e30f2e2" />
+
+Video demo of the interactive equation editor:
+
+https://youtu.be/O837G7cj5fE?si=wk4sURLNVGvgSIRq
 
 ## Interactive equation solver for JupyterLite Notebooks
 

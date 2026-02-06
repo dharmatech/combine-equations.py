@@ -24,6 +24,8 @@ Video demo of the interactive equation editor:
 
 https://youtu.be/O837G7cj5fE?si=wk4sURLNVGvgSIRq
 
+This uses the `tkinter` Python library. So it's a native GUI.
+
 ## Interactive equation solver for JupyterLite Notebooks
 
 <img alt="image" src="https://github.com/user-attachments/assets/2a56090d-5e0a-4c09-a80c-72c520e9db6d" />

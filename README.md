@@ -32,6 +32,10 @@ Video demo:
 
 https://youtu.be/7ysUdxTfKhU?si=KQiYmqjUhq6nNjXn
 
+Notebook used in the demo available here:
+
+https://github.com/dharmatech/github-pages-test
+
 ## Examples
 
 Examples from the textbook University Physics are here: [examples/up](examples/up).
